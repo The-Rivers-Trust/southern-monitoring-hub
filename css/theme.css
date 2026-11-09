@@ -1,0 +1,18 @@
+/* App tokens, built on Calcite's variables, so Calcite's dark/light
+   classes on <html> handle the theme switch. */
+:root {
+  --surface-1: var(--calcite-color-foreground-1);
+  --surface-2: var(--calcite-color-foreground-2);
+  --text-primary: var(--calcite-color-text-1);
+  --text-secondary: var(--calcite-color-text-2);
+  --text-muted: var(--calcite-color-text-3);
+  --border: var(--calcite-color-border-2);
+  --status-danger: var(--calcite-color-status-danger);
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+}
+
+html[data-theme="dark"] { color-scheme: dark; }
+html[data-theme="light"] { color-scheme: light; }

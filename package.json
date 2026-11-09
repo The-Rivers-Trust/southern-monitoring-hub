@@ -1,0 +1,11 @@
+{
+  "name": "southern-monitoring-hub",
+  "private": true,
+  "description": "Map of monitoring data by metric, across datasets (ArcGIS Maps SDK for JavaScript + Calcite)",
+  "scripts": {
+    "start": "npx --yes http-server@14.1.1 . -p 8090 -c-1",
+    "build:clip": "node scripts/build-clip-area.mjs",
+    "build:ea": "node scripts/build-ea-data.mjs"
+  },
+  "type": "module"
+}

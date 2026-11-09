@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en" class="calcite-mode-dark" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Southern Monitoring Hub</title>
+
+  <link rel="stylesheet" id="arcgisThemeLink" href="https://js.arcgis.com/5.1/esri/themes/dark/main.css" />
+
+  <!-- Applies a saved light-mode choice before anything paints. Keep the
+       storage key in sync with THEME_STORAGE_KEY in js/theme.js. -->
+  <script>
+    (function () {
+      var saved = null;
+      try { saved = localStorage.getItem("southernHubTheme"); } catch (e) {}
+      if (saved === "light") {
+        document.documentElement.setAttribute("data-theme", "light");
+        document.documentElement.className = "calcite-mode-light";
+        document.getElementById("arcgisThemeLink").href = "https://js.arcgis.com/5.1/esri/themes/light/main.css";
+      }
+    })();
+  </script>
+
+  <link rel="stylesheet" href="https://js.arcgis.com/calcite-components/5.1.1/main.css" />
+  <script type="module" src="https://js.arcgis.com/5.1/"></script>
+
+  <link rel="stylesheet" href="css/theme.css" />
+  <link rel="stylesheet" href="css/layout.css" />
+</head>
+
+<body>
+  <calcite-shell>
+    <calcite-navigation slot="header">
+      <calcite-navigation-logo slot="logo" heading="Southern Monitoring Hub" icon="map"></calcite-navigation-logo>
+      <div slot="content-end" class="headerActions">
+        <calcite-select id="partnershipSelect" class="headerFilter" label="Catchment partnership" scale="s"></calcite-select>
+        <calcite-action id="themeToggle" icon="brightness" text="Switch theme" title="Switch between dark and light"></calcite-action>
+      </div>
+    </calcite-navigation>
+
+    <div class="appBody">
+      <aside class="sidePanel pickerPanel" aria-label="Choose a year and metric">
+        <div class="yearFilter">
+          <calcite-label layout="inline-space-between" scale="s">
+            Year
+            <calcite-select id="yearSelect" label="Year" scale="s"></calcite-select>
+          </calcite-label>
+        </div>
+        <calcite-flow id="pickerFlow">
+          <calcite-flow-item heading="Determinand">
+            <calcite-list id="metricList" label="Determinand" selection-mode="single-persist" selection-appearance="highlight" scale="s"></calcite-list>
+          </calcite-flow-item>
+        </calcite-flow>
+      </aside>
+
+      <main class="mapArea">
+        <arcgis-map id="map">
+          <arcgis-zoom slot="top-left"></arcgis-zoom>
+          <calcite-action id="layersAction" class="mapAction" slot="top-right" icon="layers" text="Map layers" title="Map layers: river network"></calcite-action>
+          <arcgis-scale-bar slot="bottom-left" unit="metric"></arcgis-scale-bar>
+        </arcgis-map>
+        <calcite-panel id="layersPanel" class="toolPanel" heading="Map layers" closable closed></calcite-panel>
+      </main>
+
+      <aside class="sidePanel detailsPanel" id="details" aria-label="Legend and data sources">
+        <p class="summary">Loading…</p>
+      </aside>
+    </div>
+  </calcite-shell>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

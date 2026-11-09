@@ -1,0 +1,9 @@
+/* Loaded inside each pop-up, because it sits in the map's shadow DOM. */
+.readingPopup { font-size: 13px; line-height: 1.4; }
+.readingValue { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
+.readingNote, .readingFlag { margin: 0 0 8px; }
+.readingFlag { font-weight: 600; }
+.readingPopup table { border-collapse: collapse; margin-top: 8px; width: 100%; }
+.readingPopup th { font-weight: 400; opacity: 0.75; padding: 3px 12px 3px 0; text-align: left; vertical-align: top; white-space: nowrap; }
+.readingPopup td { padding: 3px 0; overflow-wrap: anywhere; }
+.photoLink { display: inline-block; margin-top: 8px; }

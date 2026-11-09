@@ -1,0 +1,610 @@
+{
+  "schemaVersion": "0.1.0",
+  "clipArea": {
+    "description": "Only readings inside these CaBA partnerships are loaded. After changing this list, run npm run build:clip.",
+    "file": "data/clip-area.json",
+    "sourceUrl": "https://services3.arcgis.com/Bb8lfThdhugyc4G3/arcgis/rest/services/CaBA_Partnerships/FeatureServer/0",
+    "nameField": "CaBA_Partnership",
+    "names": [
+      "New Forest Catchment Partnership",
+      "Arun & Western Streams Catchment Partnership",
+      "East Hampshire Catchment Partnership",
+      "Adur & Ouse Catchment Partnership",
+      "River Medway Catchment Partnership",
+      "Rother and Romney Catchment Partnership",
+      "East Kent Catchment Partnership",
+      "North Kent Catchment Partnership",
+      "Island Rivers",
+      "Test & Itchen Catchment Partnership",
+      "Cuckmere & Pevensey Levels"
+    ]
+  },
+  "waterbodies": {
+    "description": "River and coastal waterbody catchments mostly inside the clip area, used to summarise readings. Rebuilt by npm run build:clip.",
+    "file": "data/waterbodies.json",
+    "sourceUrl": "https://services3.arcgis.com/Bb8lfThdhugyc4G3/arcgis/rest/services/WFD_River_Water_Body_Catchments_Cycle_4_With_Coastal/FeatureServer/0",
+    "idField": "water_body_id",
+    "nameField": "water_body_name",
+    "unnamedLabel": "Coastal catchment"
+  },
+  "conventions": {
+    "provenanceStatus": {
+      "known": "Stated by the data owner or in the service itself.",
+      "inferred": "Our best reading from indirect evidence. Show it as unconfirmed.",
+      "unknown": "We do not know this. The value is null and the app must say so."
+    },
+    "unknownText": {
+      "equipment": "Equipment not recorded",
+      "unit": "Unit not recorded",
+      "basis": "Not recorded whether this is expressed as the whole compound or the element"
+    },
+    "readingKinds": {
+      "exact": { "isEstimate": false, "label": "{value} {unit}" },
+      "range": { "isEstimate": true, "label": "Reading was {min}–{max} {unit}. Mapped at the mid-point, {mapValue}." },
+      "below_limit": { "isEstimate": true, "label": "Reading was below {max} {unit}. Mapped at half the limit, {mapValue}." },
+      "below_limit_as_zero": { "isEstimate": true, "label": "Reading was below {max} {unit}. Mapped as zero." },
+      "above_limit": { "isEstimate": true, "label": "Reading was above {min} {unit}. Mapped at the limit, {mapValue}, so the true value is higher." },
+      "graduation": { "isEstimate": true, "label": "Read from a graduated scale at {mapValue} {unit}." }
+    },
+    "limits": "On a field that records its own detection limits, such as <0.03 or >2.5, the limit comes from the value. 'below' says whether a below-limit reading maps at half the limit or as zero.",
+    "bands": "On a banded field every value has a band. On a number field, bands list only the special values, such as an instrument's limits, and every other value is an exact reading.",
+    "scale": "Each metric's breaks are the National River Survey dashboard's agreed thresholds, as upper bounds for Low, Slightly Elevated, Elevated and High. A reading exactly on a threshold falls in the lower band. Anything above the last is Very High.",
+    "toMetricUnit": "Multiply the reading by this to get the metric's unit. Null means it cannot be converted: show the raw reading and leave it out of the shared colour scale."
+  },
+  "metrics": [
+    { "id": "orthophosphate", "label": "Orthophosphate", "unit": "mg/L", "basis": "PO₄", "colour": { "dark": "#3987e5", "light": "#2a78d6" }, "scale": { "breaks": [0.1, 0.3, 0.75, 1] } },
+    { "id": "nitrate", "label": "Nitrate", "unit": "mg/L", "basis": "N", "colour": { "dark": "#d95926", "light": "#eb6834" }, "scale": { "breaks": [0.5, 2, 5, 20] } },
+    { "id": "nitrite", "label": "Nitrite", "unit": "mg/L", "basis": "N", "colour": { "dark": "#199e70", "light": "#1baf7a" }, "scale": { "breaks": [0, 0.15, 0.3, 1.5] } },
+    { "id": "ammonia", "label": "Ammonia", "unit": "mg/L", "basis": null, "colour": { "dark": "#c98500", "light": "#eda100" }, "scale": { "breaks": [0, 0.5, 1, 3] } },
+    { "id": "turbidity", "label": "Turbidity", "unit": "NTU", "colour": { "dark": "#d55181", "light": "#e87ba4" }, "scale": { "breaks": [12, 25, 50, 100] } },
+    { "id": "conductivity", "label": "Conductivity", "unit": "µS/cm", "colour": { "dark": "#008300", "light": "#008300" }, "scale": { "breaks": [500, 1000, 1500, 2000] } },
+    { "id": "water_temperature", "label": "Temperature", "unit": "°C", "colour": { "dark": "#9085e9", "light": "#4a3aa7" }, "scale": { "breaks": [14, 18, 20, 23] } }
+  ],
+  "datasets": [
+    {
+      "id": "global_data_set",
+      "label": "Global Data Set (FreshWater Watch)",
+      "url": "https://services3.arcgis.com/SQtySBftABENTpkx/arcgis/rest/services/Global_Data_Set_(vs)_Public_view/FeatureServer/0",
+      "structure": {
+        "type": "flat_points",
+        "layout": "wide",
+        "description": "One point per sampling visit, one column per measurement, no related tables or site table."
+      },
+      "fields": {
+        "objectId": "objectid",
+        "date": "sample_date",
+        "time": "sample_time",
+        "site": "site_name",
+        "group": "group_name",
+        "photo": "photo_url"
+      },
+      "filters": {
+        "defaultWhere": null,
+        "excludeFutureDates": true
+      },
+      "profile": {
+        "profiledOn": "2026-11-09",
+        "recordCount": 80376,
+        "maxRecordCount": 1000,
+        "earliestSample": "2012-05-12"
+      },
+      "metrics": {
+        "nitrate": {
+          "active": true,
+          "field": "chemical_nitrate",
+          "valueType": "banded",
+          "unit": { "value": "mg/L", "status": "known", "source": "Service field alias: Nitrate (mg/L)" },
+          "basis": { "value": "N", "status": "inferred", "source": "https://earthwatch.org.uk/blog/water-test-kit-how-and-why-we-test-for-nutrient-pollution" },
+          "toMetricUnit": 1,
+          "equipment": { "name": "Colour-change reagent tube", "status": "inferred", "source": "https://earthwatch.org.uk/blog/water-test-kit-how-and-why-we-test-for-nutrient-pollution" },
+          "bands": {
+            "<0.2": { "kind": "below_limit", "min": 0, "max": 0.2, "mapValue": 0.1 },
+            "0.2-0.5": { "kind": "range", "min": 0.2, "max": 0.5, "mapValue": 0.35 },
+            "0.5-1": { "kind": "range", "min": 0.5, "max": 1, "mapValue": 0.75 },
+            "1-2": { "kind": "range", "min": 1, "max": 2, "mapValue": 1.5 },
+            "2-5": { "kind": "range", "min": 2, "max": 5, "mapValue": 3.5 },
+            "5-10": { "kind": "range", "min": 5, "max": 10, "mapValue": 7.5 },
+            ">10": { "kind": "above_limit", "min": 10, "max": null, "mapValue": 10 }
+          },
+          "quality": { "noReadingValues": ["", "None", "No_water_available"] }
+        },
+        "orthophosphate": {
+          "active": true,
+          "field": "chemical_phosphate",
+          "fieldNote": "Labelled Phosphate in the service, but confirmed by the project team as orthophosphate. The service's separate chemical_orthophosphates field is empty and ignored. Recorded as P and converted to PO₄ (× 3.066).",
+          "valueType": "banded",
+          "unit": { "value": "mg/L", "status": "known", "source": "Service field alias: Phosphate (mg/L)" },
+          "basis": { "value": "P", "status": "inferred", "source": "https://earthwatch.org.uk/blog/water-test-kit-how-and-why-we-test-for-nutrient-pollution" },
+          "toMetricUnit": 3.066,
+          "equipment": { "name": "Colour-change reagent tube", "status": "inferred", "source": "https://earthwatch.org.uk/blog/water-test-kit-how-and-why-we-test-for-nutrient-pollution" },
+          "bands": {
+            "<0.02": { "kind": "below_limit", "min": 0, "max": 0.02, "mapValue": 0.01 },
+            "0.02-0.05": { "kind": "range", "min": 0.02, "max": 0.05, "mapValue": 0.035 },
+            "0.05-0.1": { "kind": "range", "min": 0.05, "max": 0.1, "mapValue": 0.075 },
+            "0.1-0.2": { "kind": "range", "min": 0.1, "max": 0.2, "mapValue": 0.15 },
+            "0.2-0.5": { "kind": "range", "min": 0.2, "max": 0.5, "mapValue": 0.35 },
+            "0.5-1": { "kind": "range", "min": 0.5, "max": 1, "mapValue": 0.75 },
+            ">1": { "kind": "above_limit", "min": 1, "max": null, "mapValue": 1 }
+          },
+          "quality": { "noReadingValues": ["", "None", "No_water_available"] }
+        },
+        "turbidity": {
+          "active": true,
+          "field": "optical_secchi_turbidity",
+          "valueType": "banded",
+          "unit": { "value": "NTU", "status": "known", "source": "Service coded values, e.g. 15 NTU" },
+          "toMetricUnit": 1,
+          "equipment": { "name": "Secchi tube", "status": "known", "source": "Service field alias: Water quality - Secchi Tube (Turbidity)" },
+          "bands": {
+            "<14_NTU": { "kind": "below_limit", "min": 0, "max": 14, "mapValue": 7 },
+            "15_NTU": { "kind": "graduation", "min": null, "max": null, "mapValue": 15 },
+            "17_NTU": { "kind": "graduation", "min": null, "max": null, "mapValue": 17 },
+            "19_NTU": { "kind": "graduation", "min": null, "max": null, "mapValue": 19 },
+            "21_NTU": { "kind": "graduation", "min": null, "max": null, "mapValue": 21 },
+            "25_NTU": { "kind": "graduation", "min": null, "max": null, "mapValue": 25 },
+            "30_NTU": { "kind": "graduation", "min": null, "max": null, "mapValue": 30 },
+            "35_NTU": { "kind": "graduation", "min": null, "max": null, "mapValue": 35 },
+            "40_NTU": { "kind": "graduation", "min": null, "max": null, "mapValue": 40 },
+            "50_NTU": { "kind": "graduation", "min": null, "max": null, "mapValue": 50 },
+            "75_NTU": { "kind": "graduation", "min": null, "max": null, "mapValue": 75 },
+            "100_NTU": { "kind": "graduation", "min": null, "max": null, "mapValue": 100 },
+            "150_NTU": { "kind": "graduation", "min": null, "max": null, "mapValue": 150 },
+            "200_NTU": { "kind": "graduation", "min": null, "max": null, "mapValue": 200 },
+            ">240_NTU": { "kind": "above_limit", "min": 240, "max": null, "mapValue": 240 }
+          },
+          "quality": { "noReadingValues": ["", "None"] }
+        },
+        "ammonia": {
+          "active": true,
+          "field": "chemical_ammonia",
+          "valueType": "number_as_text",
+          "unit": { "value": null, "status": "unknown", "source": null },
+          "basis": { "value": null, "status": "unknown", "source": null },
+          "toMetricUnit": null,
+          "equipment": { "name": null, "status": "unknown", "source": null },
+          "quality": { "noReadingValues": ["", "None"], "suspectValues": [25] }
+        },
+        "water_temperature": {
+          "active": true,
+          "field": "chemical_water_temp",
+          "valueType": "number_as_text",
+          "unit": { "value": "°C", "status": "known", "source": "Service field alias: Water temperature (°C)" },
+          "toMetricUnit": 1,
+          "equipment": { "name": null, "status": "unknown", "source": null },
+          "quality": { "noReadingValues": ["", "None"], "suspectValues": [0], "plausibleRange": [0, 45] }
+        },
+        "conductivity": {
+          "active": true,
+          "field": "chemical_conductivity",
+          "valueType": "number",
+          "unit": { "value": "µS/cm", "status": "known", "source": "Service field alias: Conductivity (µS cm-1) Europe" },
+          "toMetricUnit": 1,
+          "equipment": { "name": null, "status": "unknown", "source": null },
+          "quality": { "noReadingValues": [0] }
+        }
+      },
+      "unmappedFields": {
+        "doNotUse": {
+          "reason": "The mid columns hold 0 on rows with no reading and disagree with the range on a few rows. The nitrate follow-up is mostly blank or 0, with only 3 values above 10.",
+          "fields": ["nitrate_mid", "phosphate_mid", "chemical_nitrate_greater_10"]
+        },
+        "adminAndContext": {
+          "reason": "Identifiers, survey admin, feedback text and location labels.",
+          "fields": [
+            "objectid", "globalid", "group_id", "group_name", "audience", "site_name", "sample_date", "sample_time",
+            "no_participants", "surveylang", "feedback_eng", "feedback_core", "feedback_swahili", "Feeback_results_eng",
+            "Feeback_results_core", "feedback_rating", "feedback_score", "CreationDate", "EditDate", "submitted_date",
+            "notes", "sort_order_nitrates", "sort_order_phosphates", "sort_order_turbidity", "country", "county",
+            "RBD_NAME", "MNCAT_NAME", "photo_url"
+          ]
+        },
+        "empty": {
+          "reason": "No records as of the profile date.",
+          "fields": [
+            "sample_id", "ecological_himalayan_balsam", "ecological_floating_pennywort", "ecological_river_water_crowfoot", "ecological_australian_swamp", "ecological_swamp_crassula",
+            "ecological_sample_bottle_no", "hydrological_waterway_depth", "hydrological_waterway_width_old",
+            "hydrological_water_velocity", "chemical_alkalinity", "chemical_arsenic", "chemical_bod", "chemical_cod",
+            "chemical_chlorophyll", "chemical_chromium", "chemical_dissolved_oxygen_per", "chemical_hardness",
+            "chemical_lead", "chemical_nitrates", "chemical_nitrite", "chemical_orthophosphates", "chemical_potassium",
+            "chemical_salinity_ppt", "chemical_sediment_organic_matter", "chemical_tryptophan", "chemical_turbidity",
+            "biological_decapoda", "biological_hemiptera_coleoptera", "micro_plate_photograph", "micro_bottle_no",
+            "portable_microplastics_sample_id"
+          ]
+        },
+        "notYetMapped": {
+          "reason": "Real data, but categorical or very sparse. Candidates for later metrics.",
+          "fields": [
+            "ecological_fw_body_type", "ecological_fw_body_type_other", "ecological_land_use", "ecological_land_use_other",
+            "ecological_bank_vegetation", "ecological_bank_vegetation_oth", "ecological_vegetation_cover",
+            "ecological_floating_water_plant", "ecological_invasive_species", "ecological_invasive_species_oth",
+            "ecological_water_surface", "ecological_algae", "ecological_litter", "ecological_plastic_pollution",
+            "ecological_pollution_sources", "ecological_pollution_sources_o", "ecological_water_uses",
+            "ecological_water_uses_other", "ecological_aquatic_life", "ecological_aquatic_life_other",
+            "ecological_rain_24hours", "hydrological_water_flow", "hydrological_water_level", "hydrological_waterway_width",
+            "optical_colour", "optical_colour_other", "biological_anisoptera", "biological_baetidae",
+            "biological_chironomidae", "biological_diptera", "biological_ephemerellidae", "biological_ephemeridae",
+            "biological_ephemeroptera", "biological_gammaridae", "biological_gastropoda", "biological_heptageniidae",
+            "biological_hirudinea", "biological_odonata", "biological_oligochaeta", "biological_plecoptera",
+            "biological_simuliidae", "biological_trichoptera_cased", "biological_trichoptera_caseless",
+            "biological_tricladida", "biological_zygoptera", "litter_dumping_activities", "litter_medical_hygiene",
+            "litter_other_debris", "litter_outdoor_activities", "litter_shoreline_recreational", "litter_smoking",
+            "litter_peculiar", "meteor_rain_events", "meteor_atmospheric_conditions", "meteor_air_temp", "meteor_wind",
+            "micro_e_coli_sample", "micro_phytoplankton", "portable_water_odour", "portable_water_taste",
+            "portable_water_borehole", "chemical_ammonium", "chemical_ph", "chemical_dissolved_solids",
+            "chemical_dissolved_oxygen_mg", "micro_e_coli_bacteria", "micro_coliform_bacteria", "micro_faecal_coliforms"
+          ]
+        }
+      }
+    },
+    {
+      "id": "angling_trust_wqmn",
+      "label": "Angling Trust WQMN",
+      "url": "https://services3.arcgis.com/Bb8lfThdhugyc4G3/arcgis/rest/services/Angling_Trust_WQMN_update/FeatureServer/0",
+      "structure": {
+        "type": "flat_points",
+        "layout": "wide",
+        "description": "One point per sampling visit, one column per measurement, no related tables or site table."
+      },
+      "fields": {
+        "objectId": "OBJECTID",
+        "date": "Sample_Date",
+        "time": "Sample_time",
+        "site": "Sample_location",
+        "river": "River_Name"
+      },
+      "filters": {
+        "defaultWhere": null,
+        "excludeFutureDates": true
+      },
+      "profile": {
+        "profiledOn": "2026-11-09",
+        "recordCount": 14293,
+        "maxRecordCount": 2000,
+        "earliestSample": "2022-01-06"
+      },
+      "metrics": {
+        "nitrate": {
+          "active": true,
+          "field": "Nitrate",
+          "valueType": "banded",
+          "unit": { "value": "mg/L", "status": "known", "source": "https://anglingtrust.net/wp-content/uploads/2025/10/WQMN-Volunteer-Pack-v2.pdf" },
+          "basis": { "value": "N", "status": "known", "source": "https://anglingtrust.net/wp-content/uploads/2025/10/WQMN-Volunteer-Pack-v2.pdf" },
+          "toMetricUnit": 1,
+          "equipment": { "name": "Nitrate test strip (Hach until October 2025, then Simplex Health)", "status": "known", "source": "https://anglingtrust.net/wp-content/uploads/2025/10/WQMN-Volunteer-Pack-v2.pdf" },
+          "bands": {
+            "0": { "kind": "graduation", "min": null, "max": null, "mapValue": 0 },
+            "1": { "kind": "graduation", "min": null, "max": null, "mapValue": 1 },
+            "2": { "kind": "graduation", "min": null, "max": null, "mapValue": 2 },
+            "5": { "kind": "graduation", "min": null, "max": null, "mapValue": 5 },
+            "10": { "kind": "graduation", "min": null, "max": null, "mapValue": 10 },
+            "20": { "kind": "graduation", "min": null, "max": null, "mapValue": 20 },
+            "50": { "kind": "graduation", "min": null, "max": null, "mapValue": 50 }
+          },
+          "quality": { "noReadingValues": [] }
+        },
+        "orthophosphate": {
+          "active": true,
+          "field": "Phosphate",
+          "valueType": "number",
+          "unit": { "value": "mg/L", "status": "known", "source": "https://anglingtrust.net/wp-content/uploads/2025/10/WQMN-Volunteer-Pack-v2.pdf" },
+          "basis": { "value": "PO₄", "status": "known", "source": "https://anglingtrust.net/wp-content/uploads/2025/10/WQMN-Volunteer-Pack-v2.pdf" },
+          "toMetricUnit": 1,
+          "equipment": { "name": "Hanna Phosphate Checker", "status": "known", "source": "https://anglingtrust.net/wp-content/uploads/2025/10/WQMN-Volunteer-Pack-v2.pdf" },
+          "bands": {
+            "0": { "kind": "below_limit", "min": 0, "max": 0.04, "mapValue": 0.02 },
+            "2.5": { "kind": "above_limit", "min": 2.5, "max": null, "mapValue": 2.5 }
+          },
+          "quality": { "noReadingValues": [] }
+        },
+        "ammonia": {
+          "active": true,
+          "field": "Ammonia",
+          "valueType": "number",
+          "unit": { "value": "mg/L", "status": "known", "source": "https://anglingtrust.net/wp-content/uploads/2025/10/WQMN-Volunteer-Pack-v2.pdf" },
+          "basis": { "value": null, "status": "unknown", "source": null },
+          "toMetricUnit": 1,
+          "equipment": { "name": "Hanna Ammonia Checker", "status": "known", "source": "https://anglingtrust.net/wp-content/uploads/2025/10/WQMN-Volunteer-Pack-v2.pdf" },
+          "bands": {
+            "0": { "kind": "below_limit_as_zero", "min": 0, "max": 0.05, "mapValue": 0 },
+            "9.99": { "kind": "above_limit", "min": 9.99, "max": null, "mapValue": 9.99 }
+          },
+          "quality": { "noReadingValues": [] }
+        },
+        "conductivity": {
+          "active": true,
+          "field": "Electrical",
+          "valueType": "number",
+          "unit": { "value": "µS/cm", "status": "known", "source": "https://anglingtrust.net/wp-content/uploads/2025/10/WQMN-Volunteer-Pack-v2.pdf" },
+          "toMetricUnit": 1,
+          "equipment": { "name": "HM Digital EC-3 Meter", "status": "known", "source": "https://anglingtrust.net/wp-content/uploads/2025/10/WQMN-Volunteer-Pack-v2.pdf" },
+          "quality": { "noReadingValues": [0] }
+        },
+        "water_temperature": {
+          "active": true,
+          "field": "Temperature",
+          "valueType": "number",
+          "unit": { "value": "°C", "status": "known", "source": "https://anglingtrust.net/wp-content/uploads/2025/10/WQMN-Volunteer-Pack-v2.pdf" },
+          "toMetricUnit": 1,
+          "equipment": { "name": "HM Digital EC-3 Meter", "status": "known", "source": "https://anglingtrust.net/wp-content/uploads/2025/10/WQMN-Volunteer-Pack-v2.pdf" },
+          "quality": { "noReadingValues": [], "suspectValues": [0], "plausibleRange": [0, 45] }
+        }
+      },
+      "unmappedFields": {
+        "adminAndContext": {
+          "reason": "Identifiers, survey admin and location labels.",
+          "fields": ["OBJECTID", "ec5_uuid", "created_at", "uploaded_at", "Sample_Date", "Sample_time", "Sample_location", "River_Name"]
+        },
+        "empty": {
+          "reason": "No records as of the profile date.",
+          "fields": ["Accuracy", "Easting", "Northing", "Lat", "Long", "UTM_Zone"]
+        },
+        "notYetMapped": {
+          "reason": "Real data, but categorical. Candidates for later metrics.",
+          "fields": ["Algae", "Pollution", "Rain", "River_Flow", "River_Level", "Weather"]
+        }
+      }
+    },
+    {
+      "id": "river_guardians",
+      "label": "River Guardians",
+      "url": "https://services3.arcgis.com/Bb8lfThdhugyc4G3/arcgis/rest/services/RiverGuardiansData/FeatureServer/0",
+      "structure": {
+        "type": "flat_points",
+        "layout": "wide",
+        "description": "One point per survey, one column per measurement, no related tables or site table."
+      },
+      "fields": {
+        "objectId": "OBJECTID",
+        "date": "timestamp",
+        "site": "site",
+        "river": "river"
+      },
+      "filters": {
+        "defaultWhere": "timestamp >= TIMESTAMP '2000-01-01 00:00:00' AND (sampleTaken IS NULL OR sampleTaken <> 0)",
+        "defaultWhereNote": "Leaves out one record dated the year 26, and surveys where no water sample was taken.",
+        "excludeFutureDates": true
+      },
+      "profile": {
+        "profiledOn": "2026-11-09",
+        "recordCount": 3025,
+        "maxRecordCount": 2000,
+        "earliestSample": "2023"
+      },
+      "metrics": {
+        "orthophosphate": {
+          "active": true,
+          "field": "phosphate",
+          "fieldNote": "Readings above 2.5, up to about 22, are mostly below sewage works and look like a higher-range meter rather than errors. Not confirmed.",
+          "valueType": "number",
+          "unit": { "value": "mg/L", "status": "inferred", "source": "Not stated in the service. Hanna phosphate meters read in ppm, which is mg/L." },
+          "basis": { "value": "PO₄", "status": "inferred", "source": "Not stated in the service. Hanna phosphate checkers report PO₄, as documented by the Angling Trust WQMN volunteer pack." },
+          "toMetricUnit": 1,
+          "equipment": { "name": "Hanna meter (model not recorded)", "status": "known", "source": "Confirmed by the project team, 2026-11-09" },
+          "bands": {
+            "0": { "kind": "below_limit", "min": 0, "max": 0.04, "mapValue": 0.02 },
+            "2.5": { "kind": "above_limit", "min": 2.5, "max": null, "mapValue": 2.5 }
+          },
+          "quality": { "noReadingValues": [], "plausibleRange": [0, 30] }
+        },
+        "nitrate": {
+          "active": true,
+          "field": "nitrate",
+          "valueType": "banded",
+          "unit": { "value": "mg/L", "status": "inferred", "source": "Not stated in the service. Strip charts read in ppm, which is mg/L." },
+          "basis": { "value": "N", "status": "inferred", "source": "Not stated in the service. The values are the same chart blocks as Angling Trust's nitrate-nitrogen strips." },
+          "toMetricUnit": 1,
+          "equipment": { "name": "Nitrate test strip", "status": "inferred", "source": "Project team: strips of some kind, type not known" },
+          "bands": {
+            "0": { "kind": "graduation", "min": null, "max": null, "mapValue": 0 },
+            "1": { "kind": "graduation", "min": null, "max": null, "mapValue": 1 },
+            "2": { "kind": "graduation", "min": null, "max": null, "mapValue": 2 },
+            "5": { "kind": "graduation", "min": null, "max": null, "mapValue": 5 },
+            "10": { "kind": "graduation", "min": null, "max": null, "mapValue": 10 },
+            "20": { "kind": "graduation", "min": null, "max": null, "mapValue": 20 },
+            "50": { "kind": "graduation", "min": null, "max": null, "mapValue": 50 }
+          },
+          "quality": { "noReadingValues": [] }
+        },
+        "nitrite": {
+          "active": true,
+          "field": "nitrite",
+          "fieldNote": "Most values are repeated chart-like steps, so those are treated as estimates. Values off those steps are treated as exact.",
+          "valueType": "number",
+          "unit": { "value": "mg/L", "status": "inferred", "source": "Not stated in the service." },
+          "basis": { "value": "N", "status": "inferred", "source": "Not stated in the service. Nitrite strips of this kind report NO₂-N, as in the Angling Trust WQMN volunteer pack." },
+          "toMetricUnit": 1,
+          "equipment": { "name": null, "status": "unknown", "source": null },
+          "bands": {
+            "0": { "kind": "graduation", "min": null, "max": null, "mapValue": 0 },
+            "0.15": { "kind": "graduation", "min": null, "max": null, "mapValue": 0.15 },
+            "0.3": { "kind": "graduation", "min": null, "max": null, "mapValue": 0.3 },
+            "1": { "kind": "graduation", "min": null, "max": null, "mapValue": 1 },
+            "1.5": { "kind": "graduation", "min": null, "max": null, "mapValue": 1.5 },
+            "3": { "kind": "graduation", "min": null, "max": null, "mapValue": 3 },
+            "5": { "kind": "graduation", "min": null, "max": null, "mapValue": 5 },
+            "10": { "kind": "graduation", "min": null, "max": null, "mapValue": 10 }
+          },
+          "quality": { "noReadingValues": [], "plausibleRange": [0, 10] }
+        },
+        "ammonia": {
+          "active": true,
+          "field": "ammonia",
+          "fieldNote": "Most values are repeated chart-like steps, so those are treated as estimates. Values off those steps are treated as exact.",
+          "valueType": "number",
+          "unit": { "value": "mg/L", "status": "inferred", "source": "Not stated in the service." },
+          "basis": { "value": null, "status": "unknown", "source": null },
+          "toMetricUnit": 1,
+          "equipment": { "name": null, "status": "unknown", "source": null },
+          "bands": {
+            "0": { "kind": "graduation", "min": null, "max": null, "mapValue": 0 },
+            "0.25": { "kind": "graduation", "min": null, "max": null, "mapValue": 0.25 },
+            "0.5": { "kind": "graduation", "min": null, "max": null, "mapValue": 0.5 },
+            "1": { "kind": "graduation", "min": null, "max": null, "mapValue": 1 },
+            "3": { "kind": "graduation", "min": null, "max": null, "mapValue": 3 },
+            "6": { "kind": "graduation", "min": null, "max": null, "mapValue": 6 }
+          },
+          "quality": { "noReadingValues": [] }
+        },
+        "turbidity": {
+          "active": true,
+          "field": "turbidity",
+          "valueType": "number",
+          "unit": { "value": "NTU", "status": "inferred", "source": "Not stated in the service." },
+          "toMetricUnit": 1,
+          "equipment": { "name": null, "status": "unknown", "source": null },
+          "quality": { "noReadingValues": [] }
+        },
+        "water_temperature": {
+          "active": true,
+          "field": "temperature",
+          "valueType": "number",
+          "unit": { "value": "°C", "status": "inferred", "source": "Not stated in the service." },
+          "toMetricUnit": 1,
+          "equipment": { "name": null, "status": "unknown", "source": null },
+          "quality": { "noReadingValues": [], "suspectValues": [0], "plausibleRange": [0, 45] }
+        }
+      },
+      "unmappedFields": {
+        "adminAndContext": {
+          "reason": "Identifiers, survey admin and location labels.",
+          "fields": ["OBJECTID", "cartographerVersion", "featureId", "projectId", "surveyId", "status", "photographs", "timestamp", "river", "site", "siteNumber", "sampleTaken"]
+        },
+        "empty": {
+          "reason": "No records as of the profile date.",
+          "fields": ["cartographerId"]
+        },
+        "notYetMapped": {
+          "reason": "Real data, outside the 7 determinands for now. Total dissolved solids is not conductivity, so it is not mapped to it.",
+          "fields": [
+            "waterbodyType", "recentRain", "outfalls", "dominantSubstrate", "channelVegetation", "flowConditions", "waterLevel",
+            "bankVegetationCombined", "bankVegetationTreesOrShrubs", "bankVegetationMixedPlantsOrFlowers", "bankVegetationGrass",
+            "bankVegetationBareEarth", "bankVegetationImpermeableSurface", "bankVegetationOther",
+            "invasivePlantsCombined", "invasivePlantsHimalayanBalsam", "invasivePlantsJapaneseKnotweed", "invasivePlantsGiantHogweed",
+            "invasivePlantsSkunkCabbage", "invasivePlantsCurlyWaterweed", "invasivePlantsFloatingPennywort", "invasivePlantsOther",
+            "wildlifeCombined", "wildlifeNone", "wildlifeOtter", "wildlifeWaterVole", "wildlifeKingfisher", "wildlifeGreyWagtail",
+            "wildlifeHeron", "wildlifeFish", "wildlifeDragonfliesOrDamselflies", "wildlifeDuck", "wildlifeMoorhenOrCoot", "wildlifeGoose",
+            "wildlifeSwan", "wildlifeOther",
+            "pollutionSourcesCombined", "pollutionSourcesNone", "pollutionSourcesActiveOutfalls", "pollutionSourcesInactiveOutfalls",
+            "pollutionSourcesOutfallOdour", "pollutionSourcesOutfallDiscolouration", "pollutionSourcesRiverBankCollapse",
+            "pollutionSourcesDogAccess", "pollutionSourcesLivestockAccess", "pollutionSourcesGreyWater", "pollutionSourcesRoadRunoff",
+            "pollutionSourcesSoilRunoff", "pollutionSourcesFarmRunoff", "pollutionSourcesOther",
+            "pollutionEvidenceCombined", "pollutionEvidenceSewageRelatedLitter", "pollutionEvidenceLitterOrFlyTipping",
+            "pollutionEvidenceUnpleasantOdour", "pollutionEvidenceOilySheen", "pollutionEvidenceFoam", "pollutionEvidenceSmotheringAlgae",
+            "pollutionEvidenceSewageFungus", "pollutionEvidenceOther",
+            "estimatedWidth", "estimatedDepth", "tidalWaterBody", "tideDirection",
+            "obstaclesCombined", "obstaclesNone", "obstaclesWeir", "obstaclesTree", "obstaclesDebrisDam", "obstaclesBridgeOrCulvert", "obstaclesOther",
+            "dissolvedSolids", "ph"
+          ]
+        }
+      }
+    },
+    {
+      "id": "environment_agency",
+      "label": "Environment Agency",
+      "source": {
+        "type": "static_files",
+        "folder": "data/ea",
+        "description": "Prebuilt from the EA Water Quality API by scripts/build-ea-data.mjs and refreshed weekly by a GitHub Action.",
+        "apiUrl": "https://environment.data.gov.uk/water-quality",
+        "firstYear": 2000,
+        "samplingPointTypes": ["F6", "FZ", "FA", "CE", "FB", "FC"],
+        "excludePurposes": ["COMPLIANCE AUDIT", "OPERATOR DATA", "STATUTORY FAILURES"]
+      },
+      "structure": {
+        "type": "long_observations",
+        "layout": "long",
+        "description": "One row per determinand per sample. The app combines the rows from one site at one time into a single record."
+      },
+      "fields": {
+        "objectId": "hub_id",
+        "date": "sampled_at",
+        "time": "sampled_time",
+        "site": "site_name"
+      },
+      "metrics": {
+        "orthophosphate": {
+          "active": true,
+          "field": "orthophosphate",
+          "codes": ["0180"],
+          "valueType": "number_as_text",
+          "limits": { "below": "half" },
+          "unit": { "value": "mg/L", "status": "known", "source": "EA Water Quality API" },
+          "basis": { "value": "P", "status": "known", "source": "EA determinand 0180: Orthophosphate, reactive as P" },
+          "toMetricUnit": 3.066,
+          "equipment": { "name": null, "status": "unknown", "source": null },
+          "quality": { "noReadingValues": [] }
+        },
+        "nitrate": {
+          "active": true,
+          "field": "nitrate",
+          "codes": ["0117"],
+          "valueType": "number_as_text",
+          "limits": { "below": "half" },
+          "unit": { "value": "mg/L", "status": "known", "source": "EA Water Quality API" },
+          "basis": { "value": "N", "status": "known", "source": "EA determinand 0117: Nitrate as N" },
+          "toMetricUnit": 1,
+          "equipment": { "name": null, "status": "unknown", "source": null },
+          "quality": { "noReadingValues": [] }
+        },
+        "nitrite": {
+          "active": true,
+          "field": "nitrite",
+          "codes": ["0118"],
+          "valueType": "number_as_text",
+          "limits": { "below": "zero" },
+          "unit": { "value": "mg/L", "status": "known", "source": "EA Water Quality API" },
+          "basis": { "value": "N", "status": "known", "source": "EA determinand 0118: Nitrite as N" },
+          "toMetricUnit": 1,
+          "equipment": { "name": null, "status": "unknown", "source": null },
+          "quality": { "noReadingValues": [] }
+        },
+        "ammonia": {
+          "active": true,
+          "field": "ammonia",
+          "codes": ["0111"],
+          "valueType": "number_as_text",
+          "limits": { "below": "zero" },
+          "unit": { "value": "mg/L", "status": "known", "source": "EA Water Quality API" },
+          "basis": { "value": "N", "status": "known", "source": "EA determinand 0111: Ammoniacal Nitrogen as N" },
+          "toMetricUnit": 1,
+          "equipment": { "name": null, "status": "unknown", "source": null },
+          "quality": { "noReadingValues": [] }
+        },
+        "turbidity": {
+          "active": true,
+          "field": "turbidity",
+          "codes": ["6396", "3976"],
+          "fieldNote": "6396 is reported in NTU and 3976 (in situ) in FTU. The two units are treated as equivalent.",
+          "valueType": "number_as_text",
+          "limits": { "below": "half" },
+          "unit": { "value": "NTU", "status": "known", "source": "EA Water Quality API" },
+          "toMetricUnit": 1,
+          "equipment": { "name": null, "status": "unknown", "source": null },
+          "quality": { "noReadingValues": [] }
+        },
+        "conductivity": {
+          "active": true,
+          "field": "conductivity",
+          "codes": ["0077"],
+          "valueType": "number_as_text",
+          "limits": { "below": "half" },
+          "unit": { "value": "µS/cm", "status": "known", "source": "EA determinand 0077: Conductivity at 25 C" },
+          "toMetricUnit": 1,
+          "equipment": { "name": null, "status": "unknown", "source": null },
+          "quality": { "noReadingValues": [] }
+        },
+        "water_temperature": {
+          "active": true,
+          "field": "water_temperature",
+          "codes": ["0076"],
+          "valueType": "number_as_text",
+          "limits": { "below": "half" },
+          "unit": { "value": "°C", "status": "known", "source": "EA Water Quality API" },
+          "toMetricUnit": 1,
+          "equipment": { "name": null, "status": "unknown", "source": null },
+          "quality": { "noReadingValues": [] }
+        }
+      }
+    }
+  ]
+}

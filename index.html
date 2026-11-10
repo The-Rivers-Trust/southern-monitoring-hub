@@ -26,6 +26,7 @@
 
   <link rel="stylesheet" href="css/theme.css" />
   <link rel="stylesheet" href="css/layout.css" />
+  <link rel="stylesheet" href="css/popup.css" />
 </head>
 
 <body>
@@ -38,7 +39,16 @@
       </div>
     </calcite-navigation>
 
-    <div class="appBody">
+    <!-- Each tab title's data-view pairs with a <section data-view> below.
+         The classification explorer only starts the first time it's opened. -->
+    <div class="appFrame">
+      <calcite-tab-nav class="viewTabs" id="viewTabs" scale="s">
+        <calcite-tab-title data-view="monitoring" selected>Monitoring explorer</calcite-tab-title>
+        <calcite-tab-title data-view="classification">EA Classification explorer</calcite-tab-title>
+      </calcite-tab-nav>
+
+      <div class="views">
+    <section class="view appBody" data-view="monitoring">
       <aside class="sidePanel pickerPanel" aria-label="Choose a year and metric">
         <div class="yearFilter">
           <calcite-label layout="inline-space-between" scale="s">
@@ -54,17 +64,61 @@
       </aside>
 
       <main class="mapArea">
-        <arcgis-map id="map">
-          <arcgis-zoom slot="top-left"></arcgis-zoom>
-          <calcite-action id="layersAction" class="mapAction" slot="top-right" icon="layers" text="Map layers" title="Map layers: river network"></calcite-action>
-          <arcgis-scale-bar slot="bottom-left" unit="metric"></arcgis-scale-bar>
-        </arcgis-map>
+        <div class="mapColumn">
+          <arcgis-map id="map">
+            <arcgis-zoom slot="top-left"></arcgis-zoom>
+            <calcite-action id="layersAction" class="mapAction" slot="top-right" icon="layers" text="Map layers" title="Map layers: river network"></calcite-action>
+            <arcgis-scale-bar slot="bottom-left" unit="metric"></arcgis-scale-bar>
+          </arcgis-map>
+          <calcite-panel id="infoPanel" class="infoPanel" closable closed>
+            <calcite-action id="infoPrevious" slot="header-actions-end" icon="chevron-left" text="Previous reading" title="Previous reading" hidden></calcite-action>
+            <calcite-action id="infoNext" slot="header-actions-end" icon="chevron-right" text="Next reading" title="Next reading" hidden></calcite-action>
+            <div id="infoBody" class="infoBody"></div>
+          </calcite-panel>
+        </div>
         <calcite-panel id="layersPanel" class="toolPanel" heading="Map layers" closable closed></calcite-panel>
       </main>
 
       <aside class="sidePanel detailsPanel" id="details" aria-label="Legend and data sources">
         <p class="summary">Loading…</p>
       </aside>
+    </section>
+
+    <section class="view appBody" data-view="classification" hidden>
+      <aside class="sidePanel pickerPanel" aria-label="Choose what to explore">
+        <div class="viewControls">
+          <calcite-segmented-control id="clsMode" label="Question" width="full" scale="s">
+            <calcite-segmented-control-item value="coverage" checked>Coverage</calcite-segmented-control-item>
+            <calcite-segmented-control-item value="change">Change</calcite-segmented-control-item>
+            <calcite-segmented-control-item value="status">Status</calcite-segmented-control-item>
+          </calcite-segmented-control>
+          <p class="modeHint" id="clsModeHint"></p>
+          <div class="modeOptions" id="clsModeOptions"></div>
+        </div>
+        <div class="pickerScroll">
+          <calcite-list id="clsItemList" label="Classification item" selection-mode="single-persist" selection-appearance="highlight" scale="s"></calcite-list>
+        </div>
+      </aside>
+
+      <main class="mapArea">
+        <div class="mapColumn">
+          <arcgis-map id="clsMap">
+            <arcgis-zoom slot="top-left"></arcgis-zoom>
+            <calcite-action id="clsLayersAction" class="mapAction" slot="top-right" icon="layers" text="Map layers" title="Map layers: river network"></calcite-action>
+            <arcgis-scale-bar slot="bottom-left" unit="metric"></arcgis-scale-bar>
+          </arcgis-map>
+          <calcite-panel id="clsInfoPanel" class="infoPanel" closable closed>
+            <div id="clsInfoBody" class="infoBody"></div>
+          </calcite-panel>
+        </div>
+        <calcite-panel id="clsLayersPanel" class="toolPanel" heading="Map layers" closable closed></calcite-panel>
+      </main>
+
+      <aside class="sidePanel detailsPanel" id="clsDetails" aria-label="Legend and summary">
+        <p class="summary">Loading…</p>
+      </aside>
+    </section>
+      </div>
     </div>
   </calcite-shell>
 

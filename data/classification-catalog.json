@@ -1,0 +1,48 @@
+{
+  "description": "The EA Classification explorer's dataset: WFD classification status at each monitoring site, in each recording year. A blank means the item wasn't classified at that site that year. It never means Good.",
+  "service": {
+    "label": "EA WFD site classifications",
+    "url": "https://services3.arcgis.com/Bb8lfThdhugyc4G3/arcgis/rest/services/WFD_Site_Classifications/FeatureServer/0",
+    "partnershipField": "CaBA_Partnership",
+    "fields": {
+      "objectId": "OBJECTID",
+      "siteId": "SITE_ID",
+      "name": "SITE_NAME",
+      "source": "SITE_SOURCE",
+      "region": "SITE_REGION"
+    },
+    "lastYearSuffix": "_LastAssessedYear",
+    "lastStatusSuffix": "_LastAssessedStatus"
+  },
+  "rounds": [2016, 2019, 2022, 2025],
+  "statuses": [
+    { "value": "High", "rank": 5, "colour": { "dark": "#3987e5", "light": "#2a78d6" } },
+    { "value": "Good", "rank": 4, "colour": { "dark": "#2e9e4f", "light": "#2a8f47" } },
+    { "value": "Moderate", "rank": 3, "colour": { "dark": "#e6c000", "light": "#d9b200" } },
+    { "value": "Poor", "rank": 2, "colour": { "dark": "#f08c00", "light": "#e67e00" } },
+    { "value": "Bad", "rank": 1, "colour": { "dark": "#e05252", "light": "#d63129" } }
+  ],
+  "items": [
+    { "id": "Ammonia_Phys_Chem", "label": "Ammonia", "group": "Physico-chemical" },
+    {
+      "id": "Biochemical_Oxygen_Demand_BOD",
+      "label": "Biochemical Oxygen Demand (BOD)",
+      "group": "Physico-chemical",
+      "gapIgnoredRounds": [2019],
+      "note": "Only 203 sites in England had BOD classified in 2019, against over 1,000 in each other round, so a missing 2019 isn't counted as a gap."
+    },
+    { "id": "Dissolved_oxygen", "label": "Dissolved oxygen", "group": "Physico-chemical" },
+    { "id": "Phosphate", "label": "Phosphate", "group": "Physico-chemical" },
+    { "id": "Temperature", "label": "Temperature", "group": "Physico-chemical" },
+    { "id": "Fish", "label": "Fish", "group": "Biological" },
+    { "id": "Invertebrates", "label": "Invertebrates", "group": "Biological" },
+    { "id": "Macrophytes_Sub_Element", "label": "Macrophytes", "group": "Biological" },
+    {
+      "id": "Phytobenthos_Sub_Element",
+      "label": "Phytobenthos",
+      "group": "Biological",
+      "rounds": [2016, 2025],
+      "note": "Phytobenthos wasn't classified anywhere in England in 2019 or 2022, so only 2016 and 2025 are compared."
+    }
+  ]
+}

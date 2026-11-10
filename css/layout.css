@@ -1,5 +1,14 @@
 html, body { height: 100%; margin: 0; }
 
+/* The tab bar, then the selected explorer filling the rest. */
+.appFrame { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.viewTabs { background: var(--surface-1); border-bottom: 1px solid var(--border); flex: 0 0 auto; padding-inline: var(--space-4); }
+/* No focus box after a mouse click; keyboard users still see it. */
+.viewTabs.pointerFocus { --calcite-color-focus: transparent; }
+.views { flex: 1; min-height: 0; position: relative; }
+.view { inset: 0; position: absolute; }
+.view[hidden] { display: none; }
+
 .appBody {
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr) 300px;
@@ -19,7 +28,13 @@ html, body { height: 100%; margin: 0; }
 .detailsPanel { border-inline-start: 1px solid var(--border); padding: var(--space-4); }
 
 .mapArea { display: flex; height: 100%; min-height: 0; min-width: 0; position: relative; }
-#map { flex: 1; height: 100%; min-height: 0; min-width: 0; }
+.mapColumn { display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; }
+.mapColumn arcgis-map { flex: 1; min-height: 0; min-width: 0; }
+
+/* Opens along the bottom of the map when something is clicked. */
+.infoPanel { border-top: 1px solid var(--border); flex: 0 0 45%; isolation: isolate; min-height: 0; }
+.infoPanel[closed] { display: none; }
+.infoBody { padding: var(--space-3) var(--space-4); }
 
 /* Map layers: beside the map, closed until its button is pressed. */
 .toolPanel { border-inline-start: 1px solid var(--border); flex: 0 0 320px; isolation: isolate; min-height: 0; }
@@ -55,6 +70,13 @@ html[data-theme="light"] .metricSwatch { background: var(--swatch-light); }
   .headerFilter { max-width: none; width: 200px; }
 }
 
+.viewControls { border-bottom: 1px solid var(--border); padding: var(--space-3); }
+.modeHint { color: var(--text-secondary); font-size: 0.75rem; line-height: 1.4; margin: var(--space-2) 0 0; }
+.modeOptions { display: grid; gap: var(--space-2); margin-top: var(--space-2); }
+.modeOptions:empty { display: none; }
+.modeOptions calcite-label { --calcite-label-margin-bottom: 0; }
+.pickerScroll { flex: 1; min-height: 0; overflow-y: auto; }
+
 .yearFilter { border-bottom: 1px solid var(--border); padding: var(--space-3) var(--space-3) 0; }
 
 .detailsPanel h2 { font-size: 1.125rem; font-weight: 600; margin: 0 0 var(--space-1); }
@@ -83,17 +105,50 @@ html[data-theme="light"] .metricSwatch { background: var(--swatch-light); }
 .datasetCard dd { color: var(--text-primary); margin: 0; }
 
 /* Hide the view's focus ring after a mouse click; keyboard users still see it. */
-#map.pointerFocus { --arcgis-internal-view-color-focus: transparent; }
-
-/* When the map is too narrow the pop-up docks along the bottom, over the scale bar. */
-@media (max-width: 1124px) {
-  arcgis-scale-bar { display: none; }
-}
+arcgis-map.pointerFocus { --arcgis-internal-view-color-focus: transparent; }
 
 /* Narrow screens: one column that scrolls, map first after the picker. */
 @media (max-width: 900px) {
   .appBody { display: block; overflow-y: auto; }
+  .viewTabs { padding-inline: var(--space-2); }
   .pickerPanel { border: 0; border-bottom: 1px solid var(--border); max-height: 40vh; }
-  .mapArea { height: 60vh; }
+  .mapArea { height: auto; }
+  .mapColumn arcgis-map { flex: none; height: 60vh; }
+  /* A sheet over the lower part of the map, so it's seen without scrolling. */
+  .mapColumn { position: relative; }
+  .infoPanel { bottom: 0; flex: none; height: 75%; left: 0; position: absolute; right: 0; z-index: 5; }
   .detailsPanel { border: 0; overflow: visible; }
 }
+
+/* Classification explorer legend: each row hides or shows a category. */
+.legend--toggles { gap: var(--space-1); }
+.legendToggle { --calcite-label-margin-bottom: 0; width: 100%; }
+.legendToggle calcite-checkbox { flex: none; }
+.legendText { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+.legendLabel { color: var(--text-primary); font-size: 0.8125rem; }
+.legendHint { color: var(--text-secondary); font-size: 0.6875rem; line-height: 1.3; }
+.legendCount { color: var(--text-primary); font-size: 0.8125rem; font-variant-numeric: tabular-nums; margin-inline-start: auto; }
+.marker--hollow { background: transparent; border: 2px solid var(--marker-colour); box-sizing: border-box; }
+.marker--small { height: 8px; margin-inline: 2px; width: 8px; }
+
+.clsChart { margin-top: var(--space-4); }
+.clsChart svg { display: block; width: 100%; }
+.clsChart .chartLabel { fill: var(--text-secondary); font-size: 10px; }
+.clsChart .chartLabel--strong { fill: var(--text-primary); }
+.chartBar--plain { fill: var(--series-blue); }
+.chartBar--lapsed { fill: var(--series-orange); }
+:root { --series-blue: #3987e5; --series-orange: #d95926; }
+html[data-theme="light"] { --series-blue: #2a78d6; --series-orange: #eb6834; }
+
+.statusKey { display: flex; flex-wrap: wrap; font-size: 0.75rem; gap: var(--space-1) var(--space-3); list-style: none; margin: var(--space-2) 0 0; padding: 0; }
+.statusKey li { align-items: center; display: flex; gap: var(--space-1); }
+
+.transitionTable { border-collapse: collapse; font-size: 0.6875rem; font-variant-numeric: tabular-nums; table-layout: fixed; width: 100%; }
+.transitionTable th, .transitionTable td { border: 1px solid var(--border); overflow: hidden; padding: 3px 2px; text-align: center; }
+.transitionTable tr > :first-child { width: 22%; }
+.transitionTable th { color: var(--text-secondary); font-weight: 400; }
+.transitionTable th.corner { font-size: 0.625rem; line-height: 1.2; }
+.transitionTable th.corner span { display: block; }
+.transitionTable td.isBetter { background: color-mix(in srgb, var(--series-blue) 22%, transparent); }
+.transitionTable td.isWorse { background: color-mix(in srgb, var(--series-orange) 22%, transparent); }
+.transitionTable td.isZero { color: var(--text-muted); }

@@ -138,7 +138,7 @@ function bandHeadline(band, show) {
   }[band.kind];
 }
 
-// One reading in words, for the pop-up, in the metric's reporting form.
+// One reading in words, for the details panel, in the metric's reporting form.
 // Null if it isn't a real reading. originalHeadline is set if converted.
 export function describeReading(raw, mapping, conventions) {
   const unit = mapping.unit.value ?? "";

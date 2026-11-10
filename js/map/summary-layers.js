@@ -10,6 +10,7 @@
 import {
   HEXAGON_LEVELS,
   WATERBODY_MAX_SCALE,
+  hexagonKey,
   hexagonMayCrossBoundary,
   hexagonWidthLabel,
   summariseHexagons,
@@ -19,7 +20,9 @@ import {
 import { PLACED_LAT_FIELD, PLACED_LON_FIELD, readingsFor, WATERBODY_FIELD, YEAR_FIELD } from "../data/readings-store.js";
 import { bandFor, isOnScale, mappedValue, stepIndex } from "../readings.js";
 import { BAND_COLOURS, NEUTRAL, markerRing } from "../palette.js";
-import { summaryPopupContent } from "./popup.js";
+import { reportTitle, summaryPopupContent } from "./popup.js";
+import { appendHistory } from "./history.js";
+import { detailTabs } from "../ui/detail-tabs.js";
 
 const MERCATOR = { wkid: 3857 };
 const FILL_OPACITY = 0.85;
@@ -79,6 +82,9 @@ function summaryRows(loaded, sources, conventions, filters) {
         isEstimate: Boolean(bandFor(graphic.attributes[source.mapping.field], source.mapping)),
         isBeside: placedLon !== null,
         waterbodyId: graphic.attributes[WATERBODY_FIELD],
+        record: graphic,
+        source,
+        sourceLabel: source.dataset.label,
       }];
     }));
 }
@@ -109,7 +115,7 @@ function fillHexagonLevel(index) {
   const { widthMetres } = HEXAGON_LEVELS[index];
   const place = `this ${hexagonWidthLabel(widthMetres)} hexagon of the waterbody`;
   hexagonLayers[index].graphics.addMany(summariseHexagons(drawn.rows, widthMetres).map((summary) =>
-    drawn.graphicFor(summary, hexagonShape(summary), place)));
+    drawn.graphicFor(summary, hexagonShape(summary), place, widthMetres)));
 }
 
 // Prepares the hexagon level for a map scale, if there is one.
@@ -119,7 +125,8 @@ export function fillVisibleHexagons(scale) {
 }
 
 // Redraws the summaries for a metric, year and partnership.
-export async function showSummaries(mapEl, { loaded, metric, sources, conventions, theme, year, partnership, waterbodies }) {
+export async function showSummaries(mapEl, { catalog, loaded, metric, sources, theme, year, partnership, waterbodies }) {
+  const { conventions } = catalog;
   await ensureLayers(mapEl, waterbodies);
 
   outlineGraphics.forEach((graphic) => { graphic.visible = partnership === null || graphic.attributes.partnership === partnership; });
@@ -131,20 +138,34 @@ export async function showSummaries(mapEl, { loaded, metric, sources, convention
   const rows = summaryRows(loaded, sources, conventions, { year, partnership });
   const inWaterbody = rows.filter((row) => row.waterbodyId !== null);
 
-  const graphicFor = (summary, geometry, place) => {
+  // Everything ever recorded in one place, whatever the year filter.
+  const placeHistory = ({ waterbodyId, cellKey, widthMetres }) => summaryRows(loaded, sources, conventions, {})
+    .filter((row) => row.waterbodyId === waterbodyId && (!widthMetres || hexagonKey(row, widthMetres) === cellKey));
+
+  const graphicFor = (summary, geometry, place, widthMetres = null) => {
     const waterbody = waterbodiesById.get(summary.waterbodyId);
     const { ring, ...attributes } = summary;
     return new sdk.Graphic({
       geometry,
-      attributes: { ...attributes, place, waterbodyName: waterbody.name },
+      attributes: { ...attributes, place, waterbodyName: waterbody.name, widthMetres, reportedYear: year },
       symbol: {
         type: "simple-fill",
         color: colourWithAlpha(BAND_COLOURS[stepIndex(summary.median, metric.scale.breaks)], FILL_OPACITY),
         outline: { color: markerRing(theme), width: 0.5 },
       },
       popupTemplate: {
-        title: metric.label,
-        content: ({ graphic }) => summaryPopupContent(graphic.attributes, metric),
+        title: reportTitle(metric, year),
+        content: ({ graphic }) => detailTabs(
+          summaryPopupContent(graphic.attributes, metric),
+          `${year === null ? "All years" : year} summary`,
+          (container) => appendHistory(container, {
+            catalog,
+            loaded,
+            metric,
+            placeName: graphic.attributes.widthMetres ? "this hexagon" : "this waterbody",
+            getRows: () => placeHistory(graphic.attributes),
+          }),
+        ),
       },
     });
   };

@@ -16,6 +16,8 @@ import { countInView, showMetric, syncDetailLayers } from "./map/metric-layers.j
 import { areaExtent, partnershipExtent } from "./map/extents.js";
 import { fillVisibleHexagons } from "./map/summary-layers.js";
 import { setupLayersPanel } from "./map/layers-panel.js";
+import { initInfoPanel } from "./map/info-panel.js";
+import { initClassificationExplorer } from "./classification/explorer.js";
 import { el } from "./dom.js";
 
 const BASEMAP = { dark: "dark-gray-vector", light: "gray-vector" };
@@ -41,6 +43,7 @@ let setCounts;
 let viewTimer;
 let levelTimer;
 let updatePicker;
+let classificationExplorer = null;
 
 const yearText = () => (selectedYear === null ? "across all years" : `in ${selectedYear}`);
 
@@ -172,11 +175,63 @@ async function selectYear(year) {
   if (year === selectedYear) applyFilters(); // a newer choice replaces this one
 }
 
+const classificationMapEl = document.getElementById("clsMap");
+
 async function zoomToSelection() {
   const [Extent] = await $arcgis.import(["@arcgis/core/geometry/Extent.js"]);
-  const extent = new Extent(selectedPartnership === null ? areaExtent(area) : partnershipExtent(area, selectedPartnership));
+  const extent = new Extent(selectedPartnership === null ? areaExtent(area) : partnershipExtent(area, selectedPartnership)).expand(1.1);
   // Rejected if another zoom interrupts it, which is fine.
-  mapEl.goTo(extent.expand(1.1)).catch(() => {});
+  for (const map of [mapEl, classificationMapEl]) {
+    if (map.ready) map.goTo(extent).catch(() => {});
+  }
+}
+
+// The explorer being left hands its view to the one being opened, so
+// switching tabs keeps the same place on the map.
+function initViewSwitching() {
+  const nav = document.getElementById("viewTabs");
+  const views = document.querySelectorAll(".view[data-view]");
+  const maps = { monitoring: mapEl, classification: classificationMapEl };
+  let current = "monitoring";
+
+  nav.addEventListener("calciteTabChange", async () => {
+    const selectedTitle = nav.selectedTitle;
+    const selected = selectedTitle?.dataset.view;
+    if (!selected || selected === current) return;
+    // A tab nav on its own never updates each title's selected state.
+    nav.querySelectorAll("calcite-tab-title").forEach((title) => { title.selected = title === selectedTitle; });
+    views.forEach((view) => { view.hidden = view.dataset.view !== selected; });
+    const viewpoint = maps[current].ready ? maps[current].viewpoint?.clone() : null;
+    current = selected;
+    if (selected === "classification") {
+      classificationExplorer ??= initClassificationExplorer({
+        area,
+        elements: {
+          mapEl: classificationMapEl,
+          modeEl: document.getElementById("clsMode"),
+          hintEl: document.getElementById("clsModeHint"),
+          optionsEl: document.getElementById("clsModeOptions"),
+          listEl: document.getElementById("clsItemList"),
+          detailsEl: document.getElementById("clsDetails"),
+          infoPanel: document.getElementById("clsInfoPanel"),
+          infoBody: document.getElementById("clsInfoBody"),
+          layersPanel: document.getElementById("clsLayersPanel"),
+          layersAction: document.getElementById("clsLayersAction"),
+        },
+      });
+      classificationExplorer.setPartnership(selectedPartnership);
+      const starting = classificationExplorer.show();
+      if (viewpoint && !classificationMapEl.ready) {
+        // Not ready yet: start where the other map is.
+        classificationMapEl.viewpoint = viewpoint;
+        await starting;
+        return;
+      }
+    }
+    if (viewpoint && maps[selected].ready) maps[selected].viewpoint = viewpoint;
+  });
+  nav.addEventListener("pointerdown", () => nav.classList.add("pointerFocus"));
+  nav.addEventListener("keydown", () => nav.classList.remove("pointerFocus"));
 }
 
 async function start() {
@@ -189,13 +244,20 @@ async function start() {
 
   catalog = await loadCatalog();
   [area, waterbodies] = await Promise.all([loadClipArea(catalog), loadWaterbodies(catalog)]);
+  initViewSwitching();
   // Starts before the map is ready, so the two load side by side.
   const reading = loadReadings(catalog, area, waterbodies);
 
   mapEl.extent = areaExtent(area);
+  mapEl.popupDisabled = true; // clicks open the bottom panel instead
   await mapEl.viewOnReady();
-  // Dock the pop-up when the map is narrow or short, so it isn't cut off.
-  mapEl.popup.dockOptions = { ...mapEl.popup.dockOptions, breakpoint: { width: 544, height: 480 } };
+  await initInfoPanel(
+    mapEl,
+    document.getElementById("infoPanel"),
+    document.getElementById("infoBody"),
+    document.getElementById("infoPrevious"),
+    document.getElementById("infoNext"),
+  );
 
   loaded = await reading;
   const years = availableYears(loaded);
@@ -214,6 +276,7 @@ async function start() {
   renderPartnershipFilter(document.getElementById("partnershipSelect"), area.partnerships.map((partnership) => partnership.name), (name) => {
     selectedPartnership = name;
     applyFilters();
+    classificationExplorer?.setPartnership(name);
     zoomToSelection();
   });
 

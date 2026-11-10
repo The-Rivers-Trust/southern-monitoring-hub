@@ -10,8 +10,9 @@ import { categoryExpression, category, isOnScale, stepLabels, FLAGGED, UNSCALED 
 import { PARTNERSHIP_FIELD, readingsFor, WATERBODY_FIELD } from "../data/readings-store.js";
 import { HEXAGON_MAX_SCALE, fromMercator } from "../aggregation.js";
 import { BAND_COLOURS, NEUTRAL, markerRing } from "../palette.js";
-import { popupContent } from "./popup.js";
+import { popupContent, reportTitle } from "./popup.js";
 import { showSummaries } from "./summary-layers.js";
+import { closeInfoPanel } from "./info-panel.js";
 
 // How far around the view individual readings are prepared, so small
 // pans don't need rebuilding.
@@ -57,7 +58,7 @@ function buildRenderer(mapping, metric, theme) {
   };
 }
 
-function buildLayer({ FeatureLayer, Graphic }, source, metric, catalog, loaded, records, titleSuffix) {
+function buildLayer({ FeatureLayer, Graphic }, source, metric, catalog, loaded, records, titleSuffix, year) {
   const { dataset, mapping } = source;
   const { conventions } = catalog;
   const layer = new FeatureLayer({
@@ -73,7 +74,7 @@ function buildLayer({ FeatureLayer, Graphic }, source, metric, catalog, loaded, 
     outFields: ["*"],
     orderBy: [{ field: dataset.fields.date, order: "descending" }],
     popupTemplate: {
-      title: metric.label,
+      title: reportTitle(metric, year),
       outFields: ["*"],
       content: ({ graphic }) => popupContent(graphic.attributes, { dataset, mapping, metric, conventions }),
     },
@@ -126,7 +127,7 @@ export function syncDetailLayers(mapEl) {
   detailBounds = viewBounds(mapEl, DETAIL_AREA_FACTOR);
   detailLayers = sources.map((source, index) => {
     const records = shown[index].filter((record) => isWithin(record, detailBounds));
-    const layer = buildLayer(sdk, source, metric, catalog, loaded, records, "");
+    const layer = buildLayer(sdk, source, metric, catalog, loaded, records, "", drawing.year);
     layer.renderer = buildRenderer(source.mapping, metric, theme);
     return layer;
   });
@@ -141,7 +142,7 @@ export async function showMetric(mapEl, { catalog, loaded, metric, sources, them
     "@arcgis/core/Graphic.js",
   ]);
   const sdk = { FeatureLayer, Graphic };
-  const summaries = await showSummaries(mapEl, { loaded, metric, sources, conventions: catalog.conventions, theme, year, partnership, waterbodies });
+  const summaries = await showSummaries(mapEl, { catalog, loaded, metric, sources, theme, year, partnership, waterbodies });
   shown = sources.map((source) => readingsFor(loaded, source, catalog.conventions, { year, partnership }));
 
   // Readings no waterbody can summarise stay on the map as points until
@@ -154,7 +155,7 @@ export async function showMetric(mapEl, { catalog, loaded, metric, sources, them
     const key = `${metric.id}|${source.dataset.id}`;
     if (!outsideLayers.has(key)) {
       const records = readingsFor(loaded, source, catalog.conventions, { year }).filter((record) => record.attributes[WATERBODY_FIELD] === null);
-      outsideLayers.set(key, buildLayer(sdk, source, metric, catalog, loaded, records, " (outside waterbodies)"));
+      outsideLayers.set(key, buildLayer(sdk, source, metric, catalog, loaded, records, " (outside waterbodies)", year));
     }
     const layer = outsideLayers.get(key);
     layer.renderer = buildRenderer(source.mapping, metric, theme);
@@ -163,12 +164,12 @@ export async function showMetric(mapEl, { catalog, loaded, metric, sources, them
     return layer;
   }) : [];
 
-  mapEl.popup?.close?.();
+  closeInfoPanel();
   removeDetailLayers(mapEl);
   mapEl.map.layers.removeMany(current);
   current = outsideReadings;
   mapEl.map.layers.addMany(current);
-  drawing = { summaries, sdk, metric, catalog, loaded, sources, theme };
+  drawing = { summaries, sdk, metric, catalog, loaded, sources, theme, year };
   syncDetailLayers(mapEl);
   return summaries;
 }

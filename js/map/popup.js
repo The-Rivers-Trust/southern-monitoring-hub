@@ -25,15 +25,7 @@ function safePhotoUrl(value) {
   }
 }
 
-// Pop-ups sit in the map's shadow DOM, out of reach of the page's CSS.
-function popupRoot() {
-  const root = el("div", "readingPopup");
-  const stylesheet = document.createElement("link");
-  stylesheet.rel = "stylesheet";
-  stylesheet.href = "css/popup.css";
-  root.append(stylesheet);
-  return root;
-}
+const popupRoot = () => el("div", "readingPopup");
 
 function detailsTable(rows) {
   const table = el("table");
@@ -63,10 +55,21 @@ export function summaryPopupContent(summary, metric) {
     ["Waterbody ID", summary.waterbodyId],
     ["Lowest", withUnit(summary.min)],
     ["Highest", withUnit(summary.max)],
-    ["Years", summary.minYear === summary.maxYear ? String(summary.minYear) : `${summary.minYear}–${summary.maxYear}`],
+    ["Year reported", yearReported(summary)],
+    ...summary.sourceCounts.map(([label, count], index) => [
+      index === 0 ? (summary.sourceCounts.length === 1 ? "Data source" : "Data sources") : "",
+      `${label}: ${count} reading${count === 1 ? "" : "s"}`,
+    ]),
   ]));
   return root;
 }
+
+function yearReported({ reportedYear, minYear, maxYear }) {
+  if (reportedYear !== null) return String(reportedYear);
+  return minYear === maxYear ? `All years (${minYear})` : `All years (${minYear}–${maxYear})`;
+}
+
+export const reportTitle = (metric, year) => `${metric.label}, ${year === null ? "all years" : year}`;
 
 export function popupContent(attributes, { dataset, mapping, metric, conventions }) {
   const { fields } = dataset;

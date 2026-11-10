@@ -1,9 +1,33 @@
-/* Loaded inside each pop-up, because it sits in the map's shadow DOM. */
-.readingPopup { font-size: 13px; line-height: 1.4; }
+/* What's shown about the clicked waterbody, hexagon or reading. */
+.readingPopup { font-size: 13px; line-height: 1.4; max-width: 640px; }
+.detailPane { font-size: 13px; line-height: 1.4; padding-top: 12px; }
+.detailPane[hidden] { display: none; }
 .readingValue { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
 .readingNote, .readingFlag { margin: 0 0 8px; }
 .readingFlag { font-weight: 600; }
-.readingPopup table { border-collapse: collapse; margin-top: 8px; width: 100%; }
+.readingPopup table { border-collapse: collapse; height: fit-content; margin-top: 8px; width: 100%; }
 .readingPopup th { font-weight: 400; opacity: 0.75; padding: 3px 12px 3px 0; text-align: left; vertical-align: top; white-space: nowrap; }
 .readingPopup td { padding: 3px 0; overflow-wrap: anywhere; }
 .photoLink { display: inline-block; margin-top: 8px; }
+
+.historyHeading { font-size: 13px; font-weight: 600; margin: 0 0 4px; }
+.historySlider { display: block; margin: 18px 10px 6px 40px; }
+.historyChart svg { display: block; touch-action: pan-y; width: 100%; }
+.chartLabel { fill: currentColor; font-size: 10px; opacity: 0.75; }
+.chartAxis { stroke: currentColor; stroke-opacity: 0.35; }
+.chartMark { stroke: var(--calcite-color-foreground-1); stroke-width: 0.75; }
+.chartHighlight { fill: none; pointer-events: none; stroke: currentColor; stroke-width: 1.5; }
+.chartReadout { font-size: 12px; margin: 6px 0 0; min-height: 18px; }
+.readingNote { margin: 0 0 8px; }
+
+/* Classification explorer: a site's status in every round. */
+.sitePopup { max-width: none; }
+.tableScroll { overflow-x: auto; }
+.siteTable { min-width: 640px; }
+.siteTable th, .siteTable td { border-bottom: 1px solid var(--border); padding: 4px 10px 4px 0; white-space: nowrap; }
+.siteTable tr:first-child th { font-size: 12px; }
+.siteTable tr.isSelected th, .siteTable tr.isSelected td { font-weight: 600; opacity: 1; }
+.siteTable tr.isSelected { background: var(--surface-2); }
+.siteTable tr.isEmpty { opacity: 0.55; }
+.statusChip { border-inline-start: 10px solid var(--chip-colour); padding-inline-start: 6px; }
+.statusBlank { opacity: 0.6; }

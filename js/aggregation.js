@@ -121,10 +121,18 @@ export function median(values) {
   return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
 }
 
+// How many readings each dataset contributed, largest first.
+export function countBySource(rows) {
+  const counts = new Map();
+  for (const { sourceLabel } of rows) counts.set(sourceLabel, (counts.get(sourceLabel) ?? 0) + 1);
+  return [...counts].sort((a, b) => b[1] - a[1]);
+}
+
 function summarise(rows) {
   const values = rows.map((row) => row.value);
   const years = rows.map((row) => row.year);
   return {
+    sourceCounts: countBySource(rows),
     count: rows.length,
     median: median(values),
     min: Math.min(...values),
@@ -204,13 +212,22 @@ export function hexagonMayCrossBoundary(hexagonRing, waterbodyRings) {
 // gives two separate pieces, so waterbodies are never blended. Rings
 // are whole hexagons, in Web Mercator; the caller cuts them to shape.
 export function summariseHexagons(rows, widthMetres) {
-  const radius = (widthMetres * GROUND_TO_MERCATOR) / Math.sqrt(3);
-  const cells = groupBy(rows, (row) => {
-    const [x, y] = toMercator(row.lon, row.lat);
-    return `${row.waterbodyId}|${nearestCell(x, y, radius).join(",")}`;
-  });
+  const cells = groupBy(rows, (row) => hexagonKey(row, widthMetres));
   return [...cells].map(([key, inside]) => {
     const [q, r] = key.split("|")[1].split(",").map(Number);
-    return { waterbodyId: inside[0].waterbodyId, ring: hexagonRing(q, r, radius), ...summarise(inside) };
+    return {
+      waterbodyId: inside[0].waterbodyId,
+      cellKey: key,
+      ring: hexagonRing(q, r, hexagonRadius(widthMetres)),
+      ...summarise(inside),
+    };
   });
+}
+
+const hexagonRadius = (widthMetres) => (widthMetres * GROUND_TO_MERCATOR) / Math.sqrt(3);
+
+// Identifies the piece of a hexagon, within its waterbody, a row is in.
+export function hexagonKey(row, widthMetres) {
+  const [x, y] = toMercator(row.lon, row.lat);
+  return `${row.waterbodyId}|${nearestCell(x, y, hexagonRadius(widthMetres)).join(",")}`;
 }

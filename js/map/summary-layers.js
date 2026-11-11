@@ -18,7 +18,7 @@ import {
   toMercator,
 } from "../aggregation.js";
 import { PLACED_LAT_FIELD, PLACED_LON_FIELD, readingsFor, WATERBODY_FIELD, YEAR_FIELD } from "../data/readings-store.js";
-import { bandFor, isOnScale, mappedValue, stepIndex } from "../readings.js";
+import { estimateOf, isOnScale, mappedValue, stepIndex } from "../readings.js";
 import { BAND_COLOURS, NEUTRAL, markerRing } from "../palette.js";
 import { reportTitle, summaryPopupContent } from "./popup.js";
 import { appendHistory } from "./history.js";
@@ -74,12 +74,14 @@ function summaryRows(loaded, sources, conventions, filters) {
       const value = mappedValue(graphic.attributes[source.mapping.field], source.mapping);
       if (value === null) return [];
       const placedLon = graphic.attributes[PLACED_LON_FIELD];
+      const estimate = estimateOf(graphic.attributes[source.mapping.field], source.mapping);
       return [{
         lon: placedLon ?? graphic.geometry.x,
         lat: graphic.attributes[PLACED_LAT_FIELD] ?? graphic.geometry.y,
         value,
         year: graphic.attributes[YEAR_FIELD],
-        isEstimate: Boolean(bandFor(graphic.attributes[source.mapping.field], source.mapping)),
+        isEstimate: estimate !== null,
+        estimate,
         isBeside: placedLon !== null,
         waterbodyId: graphic.attributes[WATERBODY_FIELD],
         record: graphic,
@@ -163,6 +165,7 @@ export async function showSummaries(mapEl, { catalog, loaded, metric, sources, t
             loaded,
             metric,
             placeName: graphic.attributes.widthMetres ? "this hexagon" : "this waterbody",
+            startYear: graphic.attributes.reportedYear,
             getRows: () => placeHistory(graphic.attributes),
           }),
         ),

@@ -3,6 +3,8 @@
 :root {
   --surface-1: var(--calcite-color-foreground-1);
   --surface-2: var(--calcite-color-foreground-2);
+  --surface-3: var(--calcite-color-foreground-3);
+  --radius: 4px;
   --text-primary: var(--calcite-color-text-1);
   --text-secondary: var(--calcite-color-text-2);
   --text-muted: var(--calcite-color-text-3);

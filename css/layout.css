@@ -152,3 +152,13 @@ html[data-theme="light"] { --series-blue: #2a78d6; --series-orange: #eb6834; }
 .transitionTable td.isBetter { background: color-mix(in srgb, var(--series-blue) 22%, transparent); }
 .transitionTable td.isWorse { background: color-mix(in srgb, var(--series-orange) 22%, transparent); }
 .transitionTable td.isZero { color: var(--text-muted); }
+.yearBar { cursor: pointer; outline: none; }
+.yearBarHit { fill: transparent; }
+.yearBar:hover .yearBarHit, .yearBar:focus-visible .yearBarHit { fill: var(--surface-2); }
+.yearBar:focus-visible .yearBarHit { stroke: var(--text-primary); stroke-width: 1; }
+.chartBar.isDimmed { opacity: 0.3; }
+.filterNote { margin: 0 0 var(--space-2); }
+.clsChart .chartLabel { pointer-events: none; }
+/* A summary brings its own tab bar, so the panel's header is dropped. */
+.infoPanel.isHeaderless { --calcite-panel-header-background-color: transparent; }
+.infoPanel.isHeaderless .infoBody { padding-top: var(--space-1); }

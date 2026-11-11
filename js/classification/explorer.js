@@ -25,7 +25,8 @@ import {
   coverageOf,
   hasRecord,
   itemRounds,
-  lapsedByYear,
+  lastClassifiedByYear,
+  lastClassifiedYear,
   sitesPerRound,
   statusCounts,
   statusOf,
@@ -85,6 +86,7 @@ export function initClassificationExplorer({ area, elements }) {
     // Sites not classified in both rounds swamp the change map, so start hidden.
     hidden: { coverage: new Set(), change: new Set(["unpaired"]), status: new Set() },
     selectedSite: null,
+    lastYear: null, // coverage only: just the sites last classified this year
   };
   let listItems = [];
   let ready = null;
@@ -213,8 +215,11 @@ export function initClassificationExplorer({ area, elements }) {
       : `No site here has had ${current.label} classified.`;
     const entries = entriesFor(theme);
     const hidden = state.hidden[state.mode];
-    const categoryOf = message ? () => null : categoryFor(current);
-    const counts = message ? new Map(entries.map((entry) => [entry.id, 0])) : countsFor(current, here);
+    const yearFilter = state.mode === "coverage" ? state.lastYear : null;
+    const inYear = (site) => yearFilter === null || lastClassifiedYear(site.items[current.id]) === yearFilter;
+    const byCategory = categoryFor(current);
+    const categoryOf = message ? () => null : (site) => (inYear(site) ? byCategory(site) : null);
+    const counts = message ? new Map(entries.map((entry) => [entry.id, 0])) : countsFor(current, here.filter(inYear));
 
     updateList(here);
     renderClassificationDetails(detailsEl, {
@@ -225,11 +230,16 @@ export function initClassificationExplorer({ area, elements }) {
       counts,
       hidden,
       message,
-      summaryText: message ?? summaryText(current, counts, here),
+      summaryText: message ?? summaryText(current, countsFor(current, here), here),
       totalSites: here.length,
       clipNote: clipNote(),
       perRound: sitesPerRound(state.catalog, current, here),
-      lapsedByYear: lapsedByYear(state.catalog, current, here),
+      lastClassifiedByYear: lastClassifiedByYear(current, here),
+      selectedYear: yearFilter,
+      onPickYear: (year) => {
+        state.lastYear = year;
+        draw();
+      },
       transitions: state.mode === "change" && !message ? transitions(state.catalog, current, here, state.from, state.to) : null,
       from: state.from,
       to: state.to,
@@ -264,6 +274,7 @@ export function initClassificationExplorer({ area, elements }) {
     const pick = (id) => {
       if (!id || id === state.itemId) return;
       state.itemId = id;
+      state.lastYear = null;
       listItems.forEach((listItem) => { listItem.selected = listItem.value === id; });
       draw();
     };
@@ -295,6 +306,7 @@ export function initClassificationExplorer({ area, elements }) {
 
     modeEl.addEventListener("calciteSegmentedControlChange", () => {
       state.mode = modeEl.value;
+      state.lastYear = null;
       renderOptions();
       draw();
     });

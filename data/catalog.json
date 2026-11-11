@@ -40,13 +40,14 @@
     },
     "readingKinds": {
       "exact": { "isEstimate": false, "label": "{value} {unit}" },
-      "range": { "isEstimate": true, "label": "Reading was {min}–{max} {unit}. Mapped at the mid-point, {mapValue}." },
-      "below_limit": { "isEstimate": true, "label": "Reading was below {max} {unit}. Mapped at half the limit, {mapValue}." },
-      "below_limit_as_zero": { "isEstimate": true, "label": "Reading was below {max} {unit}. Mapped as zero." },
-      "above_limit": { "isEstimate": true, "label": "Reading was above {min} {unit}. Mapped at the limit, {mapValue}, so the true value is higher." },
-      "graduation": { "isEstimate": true, "label": "Read from a graduated scale at {mapValue} {unit}." }
+      "range": { "isEstimate": true, "label": "Recorded as {min}–{max} {unit}. Counted at the bottom of the range, {mapValue}." },
+      "below_limit": { "isEstimate": true, "label": "Below the limit of detection, {max} {unit}. Counted as zero." },
+      "below_limit_as_zero": { "isEstimate": true, "label": "Below the limit of detection, {max} {unit}. Counted as zero." },
+      "above_limit": { "isEstimate": true, "label": "Beyond the limit of detection, recorded as above {min} {unit}. Counted at the limit, {mapValue}, so the true value is higher." },
+      "graduation": { "isEstimate": true, "label": "Read from a graduated scale at {mapValue} {unit}. Counted at that step." }
     },
-    "limits": "On a field that records its own detection limits, such as <0.03 or >2.5, the limit comes from the value. 'below' says whether a below-limit reading maps at half the limit or as zero.",
+    "limits": "On a field that records its own detection limits, such as <0.03 or >2.5, the limit comes from the value. A below-limit reading counts as zero; an above-limit one counts at the limit.",
+    "estimates": "A range counts at its bottom and a below-limit reading as zero, so a summary is never pushed up by a guess. A dataset with limitsAreExact (an accredited laboratory) has its limits treated as exact readings, not estimates.",
     "bands": "On a banded field every value has a band. On a number field, bands list only the special values, such as an instrument's limits, and every other value is an exact reading.",
     "scale": "Each metric's breaks are the National River Survey dashboard's agreed thresholds, as upper bounds for Low, Slightly Elevated, Elevated and High. A reading exactly on a threshold falls in the lower band. Anything above the last is Very High.",
     "toMetricUnit": "Multiply the reading by this to get the metric's unit. Null means it cannot be converted: show the raw reading and leave it out of the shared colour scale."
@@ -63,7 +64,7 @@
   "datasets": [
     {
       "id": "global_data_set",
-      "label": "Global Data Set (FreshWater Watch)",
+      "label": "FreshWater Watch",
       "url": "https://services3.arcgis.com/SQtySBftABENTpkx/arcgis/rest/services/Global_Data_Set_(vs)_Public_view/FeatureServer/0",
       "structure": {
         "type": "flat_points",
@@ -98,12 +99,12 @@
           "toMetricUnit": 1,
           "equipment": { "name": "Colour-change reagent tube", "status": "inferred", "source": "https://earthwatch.org.uk/blog/water-test-kit-how-and-why-we-test-for-nutrient-pollution" },
           "bands": {
-            "<0.2": { "kind": "below_limit", "min": 0, "max": 0.2, "mapValue": 0.1 },
-            "0.2-0.5": { "kind": "range", "min": 0.2, "max": 0.5, "mapValue": 0.35 },
-            "0.5-1": { "kind": "range", "min": 0.5, "max": 1, "mapValue": 0.75 },
-            "1-2": { "kind": "range", "min": 1, "max": 2, "mapValue": 1.5 },
-            "2-5": { "kind": "range", "min": 2, "max": 5, "mapValue": 3.5 },
-            "5-10": { "kind": "range", "min": 5, "max": 10, "mapValue": 7.5 },
+            "<0.2": { "kind": "below_limit", "min": 0, "max": 0.2, "mapValue": 0 },
+            "0.2-0.5": { "kind": "range", "min": 0.2, "max": 0.5, "mapValue": 0.2 },
+            "0.5-1": { "kind": "range", "min": 0.5, "max": 1, "mapValue": 0.5 },
+            "1-2": { "kind": "range", "min": 1, "max": 2, "mapValue": 1 },
+            "2-5": { "kind": "range", "min": 2, "max": 5, "mapValue": 2 },
+            "5-10": { "kind": "range", "min": 5, "max": 10, "mapValue": 5 },
             ">10": { "kind": "above_limit", "min": 10, "max": null, "mapValue": 10 }
           },
           "quality": { "noReadingValues": ["", "None", "No_water_available"] }
@@ -118,12 +119,12 @@
           "toMetricUnit": 3.066,
           "equipment": { "name": "Colour-change reagent tube", "status": "inferred", "source": "https://earthwatch.org.uk/blog/water-test-kit-how-and-why-we-test-for-nutrient-pollution" },
           "bands": {
-            "<0.02": { "kind": "below_limit", "min": 0, "max": 0.02, "mapValue": 0.01 },
-            "0.02-0.05": { "kind": "range", "min": 0.02, "max": 0.05, "mapValue": 0.035 },
-            "0.05-0.1": { "kind": "range", "min": 0.05, "max": 0.1, "mapValue": 0.075 },
-            "0.1-0.2": { "kind": "range", "min": 0.1, "max": 0.2, "mapValue": 0.15 },
-            "0.2-0.5": { "kind": "range", "min": 0.2, "max": 0.5, "mapValue": 0.35 },
-            "0.5-1": { "kind": "range", "min": 0.5, "max": 1, "mapValue": 0.75 },
+            "<0.02": { "kind": "below_limit", "min": 0, "max": 0.02, "mapValue": 0 },
+            "0.02-0.05": { "kind": "range", "min": 0.02, "max": 0.05, "mapValue": 0.02 },
+            "0.05-0.1": { "kind": "range", "min": 0.05, "max": 0.1, "mapValue": 0.05 },
+            "0.1-0.2": { "kind": "range", "min": 0.1, "max": 0.2, "mapValue": 0.1 },
+            "0.2-0.5": { "kind": "range", "min": 0.2, "max": 0.5, "mapValue": 0.2 },
+            "0.5-1": { "kind": "range", "min": 0.5, "max": 1, "mapValue": 0.5 },
             ">1": { "kind": "above_limit", "min": 1, "max": null, "mapValue": 1 }
           },
           "quality": { "noReadingValues": ["", "None", "No_water_available"] }
@@ -136,7 +137,7 @@
           "toMetricUnit": 1,
           "equipment": { "name": "Secchi tube", "status": "known", "source": "Service field alias: Water quality - Secchi Tube (Turbidity)" },
           "bands": {
-            "<14_NTU": { "kind": "below_limit", "min": 0, "max": 14, "mapValue": 7 },
+            "<14_NTU": { "kind": "below_limit", "min": 0, "max": 14, "mapValue": 0 },
             "15_NTU": { "kind": "graduation", "min": null, "max": null, "mapValue": 15 },
             "17_NTU": { "kind": "graduation", "min": null, "max": null, "mapValue": 17 },
             "19_NTU": { "kind": "graduation", "min": null, "max": null, "mapValue": 19 },
@@ -291,7 +292,7 @@
           "toMetricUnit": 1,
           "equipment": { "name": "Hanna Phosphate Checker", "status": "known", "source": "https://anglingtrust.net/wp-content/uploads/2025/10/WQMN-Volunteer-Pack-v2.pdf" },
           "bands": {
-            "0": { "kind": "below_limit", "min": 0, "max": 0.04, "mapValue": 0.02 },
+            "0": { "kind": "below_limit", "min": 0, "max": 0.04, "mapValue": 0 },
             "2.5": { "kind": "above_limit", "min": 2.5, "max": null, "mapValue": 2.5 }
           },
           "quality": { "noReadingValues": [] }
@@ -381,7 +382,7 @@
           "toMetricUnit": 1,
           "equipment": { "name": "Hanna meter (model not recorded)", "status": "known", "source": "Confirmed by the project team, 2026-11-09" },
           "bands": {
-            "0": { "kind": "below_limit", "min": 0, "max": 0.04, "mapValue": 0.02 },
+            "0": { "kind": "below_limit", "min": 0, "max": 0.04, "mapValue": 0 },
             "2.5": { "kind": "above_limit", "min": 2.5, "max": null, "mapValue": 2.5 }
           },
           "quality": { "noReadingValues": [], "plausibleRange": [0, 30] }
@@ -501,6 +502,8 @@
     {
       "id": "environment_agency",
       "label": "Environment Agency",
+      "limitsAreExact": true,
+      "limitsAreExactReason": "Accredited laboratory analysis: a result below the detection limit is reliable, so it counts as zero and isn't marked as an estimate.",
       "source": {
         "type": "static_files",
         "folder": "data/ea",
@@ -527,7 +530,7 @@
           "field": "orthophosphate",
           "codes": ["0180"],
           "valueType": "number_as_text",
-          "limits": { "below": "half" },
+          "limits": { "below": "zero" },
           "unit": { "value": "mg/L", "status": "known", "source": "EA Water Quality API" },
           "basis": { "value": "P", "status": "known", "source": "EA determinand 0180: Orthophosphate, reactive as P" },
           "toMetricUnit": 3.066,
@@ -539,7 +542,7 @@
           "field": "nitrate",
           "codes": ["0117"],
           "valueType": "number_as_text",
-          "limits": { "below": "half" },
+          "limits": { "below": "zero" },
           "unit": { "value": "mg/L", "status": "known", "source": "EA Water Quality API" },
           "basis": { "value": "N", "status": "known", "source": "EA determinand 0117: Nitrate as N" },
           "toMetricUnit": 1,
@@ -576,7 +579,7 @@
           "codes": ["6396", "3976"],
           "fieldNote": "6396 is reported in NTU and 3976 (in situ) in FTU. The two units are treated as equivalent.",
           "valueType": "number_as_text",
-          "limits": { "below": "half" },
+          "limits": { "below": "zero" },
           "unit": { "value": "NTU", "status": "known", "source": "EA Water Quality API" },
           "toMetricUnit": 1,
           "equipment": { "name": null, "status": "unknown", "source": null },
@@ -587,7 +590,7 @@
           "field": "conductivity",
           "codes": ["0077"],
           "valueType": "number_as_text",
-          "limits": { "below": "half" },
+          "limits": { "below": "zero" },
           "unit": { "value": "µS/cm", "status": "known", "source": "EA determinand 0077: Conductivity at 25 C" },
           "toMetricUnit": 1,
           "equipment": { "name": null, "status": "unknown", "source": null },
@@ -598,7 +601,7 @@
           "field": "water_temperature",
           "codes": ["0076"],
           "valueType": "number_as_text",
-          "limits": { "below": "half" },
+          "limits": { "below": "zero" },
           "unit": { "value": "°C", "status": "known", "source": "EA Water Quality API" },
           "toMetricUnit": 1,
           "equipment": { "name": null, "status": "unknown", "source": null },

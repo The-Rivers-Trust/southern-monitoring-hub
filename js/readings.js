@@ -31,9 +31,7 @@ function limitBand(raw, mapping) {
   const limit = match ? Number(match[2]) : NaN;
   if (!Number.isFinite(limit)) return null;
   if (match[1] === ">") return { kind: "above_limit", min: limit, max: null, mapValue: limit };
-  return mapping.limits.below === "zero"
-    ? { kind: "below_limit_as_zero", min: 0, max: limit, mapValue: 0 }
-    : { kind: "below_limit", min: 0, max: limit, mapValue: limit / 2 };
+  return { kind: "below_limit_as_zero", min: 0, max: limit, mapValue: 0 };
 }
 
 // The band for a raw value, if it's an estimate or limit rather than exact.
@@ -41,6 +39,23 @@ export function bandFor(raw, mapping) {
   if (raw === null || raw === undefined) return null;
   return mapping.bands?.[raw] ?? limitBand(raw, mapping);
 }
+
+// How a reading falls short of an exact value: "range" (such as 2–5),
+// "step" (read off a colour chart), "below" or "above" the limit of
+// detection. limit is the detection limit in the metric's unit. Null for
+// an exact reading, or a dataset whose limits are reliable enough to
+// count as exact.
+const ESTIMATE_KIND = { range: "range", graduation: "step", below_limit: "below", below_limit_as_zero: "below", above_limit: "above" };
+
+export function estimateOf(raw, mapping) {
+  const band = bandFor(raw, mapping);
+  if (!band || mapping.limitsAreExact) return null;
+  const kind = ESTIMATE_KIND[band.kind];
+  const factor = mapping.toMetricUnit ?? 1;
+  const limit = kind === "below" ? band.max : kind === "above" ? band.min : null;
+  return { kind, limit: limit === null ? null : Number((limit * factor).toPrecision(3)) };
+}
+
 
 // Which band a value is in. Thresholds are inclusive upper bounds.
 export function stepIndex(value, breaks) {
@@ -86,8 +101,8 @@ export function categoryExpression(mapping, metric) {
     `var prefix = Left(text, 1);`,
     `if (prefix == "<" || prefix == ">") {`,
     `  var limit = Number(Mid(text, 1));`,
-    `  var limitValue = IIf(prefix == "<", limit * ${mapping.limits.below === "zero" ? 0 : 0.5}, limit) * ${mapping.toMetricUnit ?? 1};`,
-    `  return ${scaledResult("limitValue", true)};`,
+    `  var limitValue = IIf(prefix == "<", 0, limit) * ${mapping.toMetricUnit ?? 1};`,
+    `  return ${scaledResult("limitValue", !mapping.limitsAreExact)};`,
     `}`,
   ] : [];
 
@@ -156,7 +171,7 @@ export function describeReading(raw, mapping, conventions) {
       headline: withUnit(bandHeadline(band, show)),
       originalHeadline: factor === 1 ? null : withUnit(bandHeadline(band, asRecorded)),
       note: fill(kind.label, { min: shown(band.min), max: shown(band.max), mapValue: shown(band.mapValue), unit }),
-      isEstimate: kind.isEstimate,
+      isEstimate: kind.isEstimate && !mapping.limitsAreExact,
       isFlagged: false,
     };
   }

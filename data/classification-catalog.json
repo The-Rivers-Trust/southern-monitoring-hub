@@ -1,7 +1,7 @@
 {
   "description": "The EA Classification explorer's dataset: WFD classification status at each monitoring site, in each recording year. A blank means the item wasn't classified at that site that year. It never means Good.",
   "service": {
-    "label": "EA WFD site classifications",
+    "label": "EA WFD Site Classifications",
     "url": "https://services3.arcgis.com/Bb8lfThdhugyc4G3/arcgis/rest/services/WFD_Site_Classifications/FeatureServer/0",
     "partnershipField": "CaBA_Partnership",
     "fields": {

@@ -104,7 +104,10 @@ function roundsChart(perRound, statuses, statusColours) {
   return svg;
 }
 
-function lapsedChart(byYear) {
+// Each bar filters the map to that year; the chosen one again clears it.
+// Sites last classified in the latest round are still monitored, so
+// they're blue; earlier years have lapsed, so they're orange.
+function lastClassifiedChart(byYear, latestRound, selectedYear, onPickYear) {
   const height = 96;
   const bottom = 16;
   const top = 12;
@@ -116,10 +119,25 @@ function lapsedChart(byYear) {
     const barHeight = (value / most) * (height - bottom - top);
     const x = index * slot + slot * 0.15;
     const y = height - bottom - barHeight;
-    svg.append(withTitle(
-      svgNode("rect", { x, y, width: slot * 0.7, height: Math.max(barHeight, 0.5), class: "chartBar chartBar--lapsed" }),
+    const classes = ["chartBar", year >= latestRound ? "chartBar--plain" : "chartBar--lapsed"];
+    if (selectedYear !== null && year !== selectedYear) classes.push("isDimmed");
+    const bar = svgNode("g", { class: "yearBar", tabindex: 0, role: "button" });
+    bar.setAttribute("aria-pressed", String(year === selectedYear));
+    bar.setAttribute("aria-label", `Last classified ${year}: ${sites(value)}. ${year === selectedYear ? "Show all years" : "Show only these on the map"}`);
+    // The whole column is clickable, so short bars are easy to hit.
+    bar.append(svgNode("rect", { x: index * slot, y: 0, width: slot, height, class: "yearBarHit" }));
+    bar.append(withTitle(
+      svgNode("rect", { x, y, width: slot * 0.7, height: Math.max(barHeight, 0.5), class: classes.join(" ") }),
       `Last classified ${year}: ${sites(value)}`,
     ));
+    const pick = () => onPickYear(year === selectedYear ? null : year);
+    bar.addEventListener("click", pick);
+    bar.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      pick();
+    });
+    svg.append(bar);
     svg.append(svgNode("text", { x: x + slot * 0.35, y: y - 3, "text-anchor": "middle", class: "chartLabel" }, count(value)));
     svg.append(svgNode("text", { x: x + slot * 0.35, y: height - 4, "text-anchor": "middle", class: "chartLabel" }, `'${String(year).slice(2)}`));
   });
@@ -179,14 +197,22 @@ export function renderClassificationDetails(container, view) {
     container.replaceChildren(...parts);
     return;
   }
+  if (view.selectedYear !== null && view.selectedYear !== undefined) {
+    parts.push(el("p", "note filterNote", `Map and counts below: sites last classified in ${view.selectedYear}.`));
+  }
   parts.push(legend(entries, counts, hidden, onToggle));
 
   if (mode === "coverage") {
-    parts.push(chartBlock("Sites classified each round", roundsChart(perRound, catalog.statuses, null),
-      "A falling bar means fewer sites were classified that round."));
-    if (view.lapsedByYear.length) {
-      parts.push(chartBlock("When lapsed sites were last classified", lapsedChart(view.lapsedByYear),
-        "Years before 2016 come from each site's last assessment, before the first round here."));
+    parts.push(chartBlock("Sites classified each round", roundsChart(perRound, catalog.statuses, null)));
+    if (view.lastClassifiedByYear.length) {
+      const { selectedYear } = view;
+      parts.push(chartBlock(
+        "When sites were last classified",
+        lastClassifiedChart(view.lastClassifiedByYear, catalog.rounds.at(-1), selectedYear, view.onPickYear),
+        selectedYear === null
+          ? "Click a bar to show only those sites on the map."
+          : `Showing sites last classified in ${selectedYear}. Click the bar again to show all years.`,
+      ));
     }
   } else {
     parts.push(chartBlock("Status each round", roundsChart(perRound, catalog.statuses, statusColours),
@@ -210,7 +236,6 @@ export function renderClassificationDetails(container, view) {
   }
 
   if (item.note) parts.push(el("p", "note", item.note));
-  parts.push(el("p", "note", "A blank in the data means the item wasn't classified at that site that round. It's never treated as Good."));
   parts.push(el("p", "note", `${clipNote} ${sites(totalSites)} in total. Source: ${catalog.service.label}.`));
   container.replaceChildren(...parts);
 }

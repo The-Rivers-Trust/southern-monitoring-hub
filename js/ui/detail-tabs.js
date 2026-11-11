@@ -48,8 +48,10 @@ export function detailTabs(summaryContent, summaryLabel, renderChart) {
     show(rememberedTab);
   });
 
+  const bar = el("div", "detailTabsBar");
+  bar.append(nav, el("div", "detailTabsActions"));
   const root = el("div", "detailTabs");
-  root.append(nav, summaryPane, chartPane);
+  root.append(bar, summaryPane, chartPane);
   show(rememberedTab);
   return root;
 }

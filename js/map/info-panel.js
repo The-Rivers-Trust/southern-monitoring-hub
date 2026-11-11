@@ -34,16 +34,33 @@ function showSelection(graphic) {
   map.map.layers.reorder(selectionLayer, map.map.layers.length - 1);
 }
 
+function closeAction() {
+  const action = document.createElement("calcite-action");
+  action.icon = "x";
+  action.text = "Close";
+  action.title = "Close";
+  action.scale = "s";
+  action.addEventListener("click", closeInfoPanel);
+  return action;
+}
+
 function showCurrent() {
   const graphic = items[position];
   const template = templateOf(graphic);
-  panel.heading = template.title;
+  const content = template.content({ graphic });
+  const tabsActions = content.querySelector?.(".detailTabsActions");
+  // Summaries carry their own tab bar, so the panel header isn't needed.
+  const headerless = Boolean(tabsActions);
+  panel.heading = headerless ? "" : template.title;
   panel.description = items.length > 1 ? `Reading ${position + 1} of ${items.length} here` : "";
+  panel.closable = !headerless;
+  panel.classList.toggle("isHeaderless", headerless);
   previous.hidden = items.length < 2;
   next.hidden = items.length < 2;
   previous.disabled = position === 0;
   next.disabled = position === items.length - 1;
-  body.replaceChildren(template.content({ graphic }));
+  tabsActions?.append(closeAction());
+  body.replaceChildren(content);
   showSelection(graphic);
 }
 
@@ -64,6 +81,11 @@ export function closeInfoPanel() {
   clearSelection();
 }
 
+// Escape closes it, as the header's close button would.
+function closeOnEscape(event) {
+  if (event.key === "Escape" && !panel.closed) closeInfoPanel();
+}
+
 export async function initInfoPanel(mapEl, panelEl, bodyEl, previousEl, nextEl) {
   const [GraphicsLayer, GraphicClass] = await $arcgis.import([
     "@arcgis/core/layers/GraphicsLayer.js",
@@ -79,6 +101,7 @@ export async function initInfoPanel(mapEl, panelEl, bodyEl, previousEl, nextEl) 
   mapEl.map.layers.add(selectionLayer);
 
   panel.addEventListener("calcitePanelClose", clearSelection);
+  panel.addEventListener("keydown", closeOnEscape);
   previous.addEventListener("click", () => { position -= 1; showCurrent(); });
   next.addEventListener("click", () => { position += 1; showCurrent(); });
 

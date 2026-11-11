@@ -1,0 +1,155 @@
+{
+  "about": "The Catchment Health scorecard (Scorecards tab): which datasets feed each measure, and how each measure is rated. Every source listed under a measure is pooled for each waterbody.",
+  "howToAddASource": [
+    "Find the measure below, and add an entry to its sources list.",
+    "dataset: the dataset's id in data/catalog.json, where the app finds its service, units and how to read ranges and limits.",
+    "name: the dataset's name, as shown on the scorecard, the map and the PDF.",
+    "fields: the field or fields holding the measure, as named in the dataset.",
+    "values: absolute, range or mixed. See valueTypes.",
+    "The built-in sources (national_river_survey, riverfly and nbs_interventions) are read by the scorecard's own code, not through data/catalog.json."
+  ],
+  "howRatingsWork": [
+    "Every measure is rated High, Good, Moderate, Poor or Bad.",
+    "better: higher means more is better, so a value at or above the high figure is High, at or above good is Good, and so on. Below poor is Bad.",
+    "better: lower means less is better, so a value at or below the high figure is High, at or below good is Good, and so on. Above poor is Bad.",
+    "A figure can be written as a fraction, such as \"1/20\".",
+    "thresholds: catalog means the measure uses its determinand's bands in data/catalog.json, the same ones that colour the Monitoring explorer, so the two can't disagree. Low is High, Slightly Elevated is Good, Elevated is Moderate, High is Poor and Very High is Bad.",
+    "statistic: mean or median, how a waterbody's readings are combined before rating.",
+    "whenNone: what a count of none means for a measure that counts things (only Action uses it so far). \"no data\" leaves it unrated, shown grey; \"bad\" rates it Bad.",
+    "A theme's rating is the average of its measures' ratings, and the overall rating the average of the themes'.",
+    "These thresholds are a provisional first pass from the National River Survey dashboard, not a reviewed standard."
+  ],
+  "valueTypes": {
+    "absolute": "Every value is an exact reading, such as 0.34.",
+    "range": "Every value is a range or a step on a colour chart, such as 2-5. Each counts at the bottom of its range, so 2-5 counts as 2.",
+    "mixed": "Mostly exact readings, with some at a limit of detection, such as 0 meaning below 0.04. Below the limit counts as 0; beyond it counts at the limit."
+  },
+  "coverage": {
+    "about": "A waterbody needs at least this much data in the period before its nutrient, wildlife and invasives measures are rated. Nutrients count sites and readings across all their sources; wildlife and invasives count National River Survey sites and surveys.",
+    "minSites": 2,
+    "minReadings": 6
+  },
+  "measures": {
+    "phosphate": {
+      "spoke": "Nutrients and Sediment",
+      "label": "Orthophosphate",
+      "rating": {"statistic": "mean", "thresholds": "catalog"},
+      "sources": [
+        {"dataset": "national_river_survey", "name": "National River Survey", "fields": ["phosphate"], "values": "absolute"},
+        {"dataset": "angling_trust_wqmn", "name": "Angling Trust WQMN", "fields": ["Phosphate"], "values": "mixed"},
+        {"dataset": "global_data_set", "name": "FreshWater Watch", "fields": ["chemical_phosphate"], "values": "range"},
+        {"dataset": "river_guardians", "name": "River Guardians", "fields": ["phosphate"], "values": "mixed"}
+      ]
+    },
+    "nitrate": {
+      "spoke": "Nutrients and Sediment",
+      "label": "Nitrate",
+      "rating": {"statistic": "median", "thresholds": "catalog"},
+      "sources": [
+        {"dataset": "national_river_survey", "name": "National River Survey", "fields": ["nitrate"], "values": "absolute"},
+        {"dataset": "angling_trust_wqmn", "name": "Angling Trust WQMN", "fields": ["Nitrate"], "values": "range"},
+        {"dataset": "global_data_set", "name": "FreshWater Watch", "fields": ["chemical_nitrate"], "values": "range"},
+        {"dataset": "river_guardians", "name": "River Guardians", "fields": ["nitrate"], "values": "range"}
+      ]
+    },
+    "nitrite": {
+      "spoke": "Nutrients and Sediment",
+      "label": "Nitrite",
+      "rating": {"statistic": "median", "thresholds": "catalog"},
+      "sources": [
+        {"dataset": "national_river_survey", "name": "National River Survey", "fields": ["nitrite"], "values": "absolute"},
+        {"dataset": "river_guardians", "name": "River Guardians", "fields": ["nitrite"], "values": "mixed"}
+      ]
+    },
+    "ammonia": {
+      "spoke": "Nutrients and Sediment",
+      "label": "Ammonia",
+      "rating": {"statistic": "median", "thresholds": "catalog"},
+      "sources": [
+        {"dataset": "national_river_survey", "name": "National River Survey", "fields": ["ammonia"], "values": "absolute"},
+        {"dataset": "angling_trust_wqmn", "name": "Angling Trust WQMN", "fields": ["Ammonia"], "values": "mixed"},
+        {"dataset": "river_guardians", "name": "River Guardians", "fields": ["ammonia"], "values": "mixed"}
+      ]
+    },
+    "turbidity": {
+      "spoke": "Nutrients and Sediment",
+      "label": "Turbidity",
+      "rating": {"statistic": "mean", "thresholds": "catalog"},
+      "sources": [
+        {"dataset": "national_river_survey", "name": "National River Survey", "fields": ["turbidity"], "values": "absolute"},
+        {"dataset": "global_data_set", "name": "FreshWater Watch", "fields": ["optical_secchi_turbidity"], "values": "range"},
+        {"dataset": "river_guardians", "name": "River Guardians", "fields": ["turbidity"], "values": "absolute"}
+      ]
+    },
+    "conductivity": {
+      "spoke": "Nutrients and Sediment",
+      "label": "Conductivity",
+      "rating": {"statistic": "mean", "thresholds": "catalog"},
+      "sources": [
+        {"dataset": "national_river_survey", "name": "National River Survey", "fields": ["conductivity"], "values": "absolute"},
+        {"dataset": "angling_trust_wqmn", "name": "Angling Trust WQMN", "fields": ["Electrical"], "values": "absolute"},
+        {"dataset": "global_data_set", "name": "FreshWater Watch", "fields": ["chemical_conductivity"], "values": "absolute"}
+      ]
+    },
+    "wildlife": {
+      "spoke": "Biodiversity",
+      "label": "Wildlife",
+      "rating": {"measure": "species seen", "better": "higher", "high": 7, "good": 5, "moderate": 3, "poor": 1},
+      "sources": [
+        {
+          "dataset": "national_river_survey",
+          "name": "National River Survey",
+          "fields": [
+            "wildlife_otter",
+            "wildlife_dipper",
+            "wildlife_water_vole",
+            "wildlife_kingfisher",
+            "wildlife_dragonflies_damselflies",
+            "wildlife_heron",
+            "wildlife_fish",
+            "wildlife_grey_wagtail",
+            "wildlife_bat",
+            "wildlife_mayflies_caddisflies"
+          ],
+          "values": "absolute"
+        }
+      ]
+    },
+    "invasives": {
+      "spoke": "Biodiversity",
+      "label": "Invasives",
+      "rating": {"measure": "invasive species seen", "better": "lower", "high": 0, "good": 1, "moderate": 2, "poor": 3},
+      "sources": [
+        {
+          "dataset": "national_river_survey",
+          "name": "National River Survey",
+          "fields": [
+            "invasive_plants_himalayan_balsam",
+            "invasive_plants_japanese_knotweed",
+            "invasive_plants_giant_hogweed",
+            "invasive_plants_skunk_cabbage",
+            "invasive_plants_curly_waterweed",
+            "invasive_plants_floating_pennywort"
+          ],
+          "values": "absolute"
+        }
+      ]
+    },
+    "invertebrates": {
+      "spoke": "Biodiversity",
+      "label": "Invertebrates",
+      "rating": {"measure": "confirmed-breach rate", "better": "lower", "high": 0, "good": "1/20", "moderate": "1/5", "poor": "1/3", "minSites": 2, "minSamples": 6, "samplesFrom": "2026-01-01"},
+      "sources": [
+        {"dataset": "riverfly", "name": "Riverfly", "fields": ["breachType", "site"], "values": "absolute"}
+      ]
+    },
+    "action": {
+      "spoke": "River Recovery",
+      "label": "Action",
+      "rating": {"measure": "delivered interventions", "better": "higher", "high": 21, "good": 11, "moderate": 4, "poor": 1, "whenNone": "no data"},
+      "sources": [
+        {"dataset": "nbs_interventions", "name": "Nature-Based Solutions Interventions (NBS)", "fields": ["Status"], "values": "absolute"}
+      ]
+    }
+  }
+}

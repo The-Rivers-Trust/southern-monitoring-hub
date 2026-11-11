@@ -1,7 +1,7 @@
 // =====================================================================
 // MAIN
-// Start-up: load the catalogue and the clipped readings, build the
-// filters, draw the first metric.
+// Start-up: the shared header and tabs, then each tab on first opening.
+// The Monitoring explorer loads the clipped readings and draws a metric.
 // =====================================================================
 
 import { loadCatalog, loadClipArea, loadWaterbodies, sourcesFor } from "./catalog.js";
@@ -18,6 +18,8 @@ import { fillVisibleHexagons } from "./map/summary-layers.js";
 import { setupLayersPanel } from "./map/layers-panel.js";
 import { initInfoPanel } from "./map/info-panel.js";
 import { initClassificationExplorer } from "./classification/explorer.js";
+import { initMapExplorer, setMapExplorerPartnership } from "./map-explorer.js";
+import { initScorecardsTab, setScorecardsPartnership } from "./scorecards/scorecards-tab.js";
 import { el } from "./dom.js";
 
 const BASEMAP = { dark: "dark-gray-vector", light: "gray-vector" };
@@ -176,23 +178,89 @@ async function selectYear(year) {
 }
 
 const classificationMapEl = document.getElementById("clsMap");
+const webMapEl = document.getElementById("webMap");
+const scorecardsMapEl = document.getElementById("scorecardsMap");
+const maps = { map: webMapEl, monitoring: mapEl, classification: classificationMapEl, scorecards: scorecardsMapEl };
 
 async function zoomToSelection() {
   const [Extent] = await $arcgis.import(["@arcgis/core/geometry/Extent.js"]);
   const extent = new Extent(selectedPartnership === null ? areaExtent(area) : partnershipExtent(area, selectedPartnership)).expand(1.1);
   // Rejected if another zoom interrupts it, which is fine.
-  for (const map of [mapEl, classificationMapEl]) {
+  for (const map of Object.values(maps)) {
     if (map.ready) map.goTo(extent).catch(() => {});
   }
 }
 
-// The explorer being left hands its view to the one being opened, so
+function showError(container, text) {
+  const message = el("p", "summary isError", text);
+  message.setAttribute("role", "alert");
+  container.replaceChildren(message);
+}
+
+// Each tab starts the first time it's opened, so a map that's never
+// looked at never loads.
+const started = new Map();
+const TAB_STARTS = {
+  map: () => initMapExplorer(webMapEl, document.getElementById("webLayerList"), area).catch((error) => {
+    console.error(error);
+    document.getElementById("webMapNote").textContent = "The Southern Data Hub map couldn't be loaded. Please refresh the page.";
+  }),
+  monitoring: () => startMonitoring().catch((error) => {
+    console.error(error);
+    showError(detailsEl, "The monitoring data couldn't be loaded. Please refresh the page.");
+  }),
+  scorecards: () => initScorecardsTab({
+    mapEl: scorecardsMapEl,
+    hintEl: document.getElementById("scorecardsHint"),
+    keyEl: document.getElementById("scorecardsKey"),
+    sourcesEl: document.getElementById("scorecardSources"),
+    deselectEl: document.getElementById("deselectWaterbody"),
+    errorAlertEl: document.getElementById("pdfErrorAlert"),
+    dates: { periodEl: document.getElementById("scorecardPeriod") },
+    health: {
+      panelEl: document.getElementById("healthPanel"),
+      pdfEl: document.getElementById("healthPdf"),
+      coverageEl: document.getElementById("healthCoverage"),
+      wheelSvg: document.getElementById("healthWheel"),
+      keyEl: document.getElementById("healthKey"),
+      detailEl: document.getElementById("healthDetail"),
+    },
+  }, { catalog, area, waterbodies, partnership: selectedPartnership }).catch((error) => {
+    console.error(error);
+    document.getElementById("scorecardsHint").textContent = "The scorecards couldn't be loaded. Please refresh the page.";
+  }),
+  classification: () => {
+    classificationExplorer = initClassificationExplorer({
+      area,
+      elements: {
+        mapEl: classificationMapEl,
+        modeEl: document.getElementById("clsMode"),
+        hintEl: document.getElementById("clsModeHint"),
+        optionsEl: document.getElementById("clsModeOptions"),
+        listEl: document.getElementById("clsItemList"),
+        detailsEl: document.getElementById("clsDetails"),
+        infoPanel: document.getElementById("clsInfoPanel"),
+        infoBody: document.getElementById("clsInfoBody"),
+        layersPanel: document.getElementById("clsLayersPanel"),
+        layersAction: document.getElementById("clsLayersAction"),
+      },
+    });
+    classificationExplorer.setPartnership(selectedPartnership);
+    return classificationExplorer.show();
+  },
+};
+
+function startTab(view) {
+  if (!started.has(view)) started.set(view, TAB_STARTS[view]());
+  return started.get(view);
+}
+
+// The tab being left hands its view to the one being opened, so
 // switching tabs keeps the same place on the map.
 function initViewSwitching() {
   const nav = document.getElementById("viewTabs");
   const views = document.querySelectorAll(".view[data-view]");
-  const maps = { monitoring: mapEl, classification: classificationMapEl };
-  let current = "monitoring";
+  let current = nav.querySelector("calcite-tab-title[selected]").dataset.view;
 
   nav.addEventListener("calciteTabChange", async () => {
     const selectedTitle = nav.selectedTitle;
@@ -203,51 +271,26 @@ function initViewSwitching() {
     views.forEach((view) => { view.hidden = view.dataset.view !== selected; });
     const viewpoint = maps[current].ready ? maps[current].viewpoint?.clone() : null;
     current = selected;
-    if (selected === "classification") {
-      classificationExplorer ??= initClassificationExplorer({
-        area,
-        elements: {
-          mapEl: classificationMapEl,
-          modeEl: document.getElementById("clsMode"),
-          hintEl: document.getElementById("clsModeHint"),
-          optionsEl: document.getElementById("clsModeOptions"),
-          listEl: document.getElementById("clsItemList"),
-          detailsEl: document.getElementById("clsDetails"),
-          infoPanel: document.getElementById("clsInfoPanel"),
-          infoBody: document.getElementById("clsInfoBody"),
-          layersPanel: document.getElementById("clsLayersPanel"),
-          layersAction: document.getElementById("clsLayersAction"),
-        },
-      });
-      classificationExplorer.setPartnership(selectedPartnership);
-      const starting = classificationExplorer.show();
-      if (viewpoint && !classificationMapEl.ready) {
-        // Not ready yet: start where the other map is.
-        classificationMapEl.viewpoint = viewpoint;
-        await starting;
-        return;
-      }
-    }
-    if (viewpoint && maps[selected].ready) maps[selected].viewpoint = viewpoint;
+    const target = maps[selected];
+    const starting = startTab(selected);
+    // A map that's still starting would set its own view on load, so it
+    // takes this one after its tab has started.
+    if (!target.ready) await starting;
+    if (viewpoint && target.ready && current === selected) target.viewpoint = viewpoint;
   });
   nav.addEventListener("pointerdown", () => nav.classList.add("pointerFocus"));
   nav.addEventListener("keydown", () => nav.classList.remove("pointerFocus"));
 }
 
-async function start() {
-  initTheme(document.getElementById("themeToggle"));
+async function startMonitoring() {
   mapEl.basemap = BASEMAP[getTheme()];
   mapEl.addEventListener("pointerdown", () => mapEl.classList.add("pointerFocus"));
   mapEl.addEventListener("keydown", (event) => {
     if (event.key === "Tab") mapEl.classList.remove("pointerFocus");
   });
 
-  catalog = await loadCatalog();
-  [area, waterbodies] = await Promise.all([loadClipArea(catalog), loadWaterbodies(catalog)]);
-  initViewSwitching();
   // Starts before the map is ready, so the two load side by side.
   const reading = loadReadings(catalog, area, waterbodies);
-
   mapEl.extent = areaExtent(area);
   mapEl.popupDisabled = true; // clicks open the bottom panel instead
   await mapEl.viewOnReady();
@@ -264,21 +307,14 @@ async function start() {
   selectedYear = years.includes(DEFAULT_YEAR) ? DEFAULT_YEAR : null;
   await ensureYearLoaded(catalog, loaded, selectedYear);
   anyYearCounts = countReadings();
-  counts = countReadings({ year: selectedYear });
+  counts = countReadings(currentFilters());
   selectedId = catalog.metrics.find((metric) => counts.get(metric.id) > 0)?.id
     ?? catalog.metrics.find((metric) => anyYearCounts.get(metric.id) > 0)?.id;
   if (!selectedId) throw new Error("No metric has readings in the clip area.");
 
   updatePicker = renderMetricPicker(listEl, catalog, selectedId, openMetric);
   updatePicker(counts, anyYearCounts, yearText());
-
   renderYearFilter(document.getElementById("yearSelect"), years, selectedYear, selectYear);
-  renderPartnershipFilter(document.getElementById("partnershipSelect"), area.partnerships.map((partnership) => partnership.name), (name) => {
-    selectedPartnership = name;
-    applyFilters();
-    classificationExplorer?.setPartnership(name);
-    zoomToSelection();
-  });
 
   onThemeChange((theme) => {
     mapEl.basemap = BASEMAP[theme];
@@ -308,9 +344,27 @@ async function start() {
   });
 }
 
+// Shared by every tab: theme, the catalogue and clip area, the header's
+// partnership filter and tab switching. Then the first tab starts.
+async function start() {
+  initTheme(document.getElementById("themeToggle"));
+  catalog = await loadCatalog();
+  [area, waterbodies] = await Promise.all([loadClipArea(catalog), loadWaterbodies(catalog)]);
+
+  renderPartnershipFilter(document.getElementById("partnershipSelect"), area.partnerships.map((partnership) => partnership.name), (name) => {
+    selectedPartnership = name;
+    if (updatePicker) applyFilters(); // the monitoring explorer, once started
+    classificationExplorer?.setPartnership(name);
+    setMapExplorerPartnership(name);
+    setScorecardsPartnership(name);
+    zoomToSelection();
+  });
+  initViewSwitching();
+  startTab(document.querySelector("#viewTabs calcite-tab-title[selected]").dataset.view);
+}
+
 start().catch((error) => {
   console.error(error);
-  const message = el("p", "summary isError", "The monitoring data couldn't be loaded. Please refresh the page.");
-  message.setAttribute("role", "alert");
-  detailsEl.replaceChildren(message);
+  showError(detailsEl, "The hub couldn't be loaded. Please refresh the page.");
+  document.getElementById("webMapNote").textContent = "The hub couldn't be loaded. Please refresh the page.";
 });

@@ -34,11 +34,12 @@ const yearSpan = (from, to) => (from === to ? String(from) : `${from}–${to}`);
 const readingCount = (count) => `${count.toLocaleString("en-GB")} reading${count === 1 ? "" : "s"}`;
 
 function caption(visible, total, from, to, firstYear, lastYear, placeName) {
-  const estimates = visible.some((point) => point.isEstimate) ? " Diamonds are estimates from a range or limit." : "";
+  const estimates = visible.some((point) => point.isEstimate) ? " Diamonds were recorded as a range or limit by a citizen science or local group, and sit at the bottom of it." : "";
   if (from === firstYear && to === lastYear) {
     return `Full record for ${placeName}, all years: ${readingCount(total)}, ${yearSpan(from, to)}.${estimates}`;
   }
-  return `Showing ${yearSpan(from, to)}: ${visible.length.toLocaleString("en-GB")} of ${readingCount(total)} for ${placeName}.${estimates}`;
+  const widen = firstYear < lastYear ? ` Drag the slider to see ${yearSpan(firstYear, lastYear)}.` : "";
+  return `Showing ${yearSpan(from, to)}: ${visible.length.toLocaleString("en-GB")} of ${readingCount(total)} for ${placeName}.${widen}${estimates}`;
 }
 
 function sourcesLine(visible) {
@@ -47,14 +48,14 @@ function sourcesLine(visible) {
   return `Data sources in this chart: ${parts.join(", ")}.`;
 }
 
-function yearSlider(firstYear, lastYear, onChange) {
+function yearSlider(firstYear, lastYear, value, onChange) {
   const slider = document.createElement("calcite-slider");
   slider.className = "historySlider";
   slider.min = firstYear;
   slider.max = lastYear;
   slider.step = 1;
   slider.snap = true;
-  slider.value = [firstYear, lastYear];
+  slider.value = value;
   slider.labelHandles = true;
   slider.scale = "s";
   slider.minLabel = "First year shown";
@@ -64,8 +65,9 @@ function yearSlider(firstYear, lastYear, onChange) {
   return slider;
 }
 
-// getRows runs once every year is loaded.
-export async function appendHistory(root, { catalog, loaded, metric, placeName, getRows }) {
+// getRows runs once every year is loaded. startYear, if given, is the
+// one year shown at first; null shows the whole record.
+export async function appendHistory(root, { catalog, loaded, metric, placeName, getRows, startYear = null }) {
   const section = el("div", "historySection");
   section.append(el("h3", "historyHeading", `${metric.label} over time (${metric.unit}${metric.basis ? ` as ${metric.basis}` : ""})`));
   const status = el("p", "readingNote", "Loading the full record…");
@@ -102,7 +104,9 @@ export async function appendHistory(root, { catalog, loaded, metric, placeName, 
       : el("p", "readingNote", `No readings in ${yearSpan(from, to)}.`));
   };
 
-  if (firstYear < lastYear) section.append(yearSlider(firstYear, lastYear, draw));
+  // A year with no readings here falls back to the whole record.
+  const start = startYear !== null && years.includes(startYear) ? [startYear, startYear] : [firstYear, lastYear];
+  if (firstYear < lastYear) section.append(yearSlider(firstYear, lastYear, start, draw));
   section.append(chartHost);
-  draw(firstYear, lastYear);
+  draw(...start);
 }

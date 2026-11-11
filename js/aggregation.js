@@ -14,12 +14,13 @@ const REFERENCE_LATITUDE = 51;
 const GROUND_TO_MERCATOR = 1 / Math.cos((REFERENCE_LATITUDE * Math.PI) / 180);
 
 // Waterbodies are shown until this map scale, then hexagons.
-export const WATERBODY_MAX_SCALE = 100000;
+export const WATERBODY_MAX_SCALE = 200000;
 
 // One level per zoom step. Widths halve as the map doubles, so hexagons
 // stay about the same size on screen.
 export const HEXAGON_LEVELS = [
-  { widthMetres: 250, minScale: WATERBODY_MAX_SCALE, maxScale: 50000 },
+  { widthMetres: 500, minScale: WATERBODY_MAX_SCALE, maxScale: 100000 },
+  { widthMetres: 250, minScale: 100000, maxScale: 50000 },
   { widthMetres: 125, minScale: 50000, maxScale: 25000 },
   { widthMetres: 60, minScale: 25000, maxScale: 12500 },
   { widthMetres: 30, minScale: 12500, maxScale: 6250 },
@@ -115,6 +116,20 @@ export function waterbodyFinder(waterbodies) {
   };
 }
 
+// Readings that weren't exact, by how: ranges, colour-chart steps and
+// readings beyond either limit of detection, each with its sources and
+// the limits recorded.
+const ESTIMATE_KINDS = ["range", "step", "below", "above"];
+
+function estimateGroups(rows) {
+  return ESTIMATE_KINDS.flatMap((kind) => {
+    const matching = rows.filter((row) => row.estimate?.kind === kind);
+    if (!matching.length) return [];
+    const limits = [...new Set(matching.map((row) => row.estimate.limit).filter((limit) => limit !== null))].sort((a, b) => a - b);
+    return [{ kind, count: matching.length, sources: countBySource(matching), limits }];
+  });
+}
+
 export function median(values) {
   const sorted = [...values].sort((a, b) => a - b);
   const middle = Math.floor(sorted.length / 2);
@@ -135,6 +150,8 @@ function summarise(rows) {
     sourceCounts: countBySource(rows),
     count: rows.length,
     median: median(values),
+    mean: values.reduce((sum, value) => sum + value, 0) / values.length,
+    estimates: estimateGroups(rows),
     min: Math.min(...values),
     max: Math.max(...values),
     minYear: Math.min(...years),

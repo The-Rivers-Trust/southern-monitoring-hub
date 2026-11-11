@@ -105,14 +105,18 @@ export function sitesPerRound(catalog, item, sites) {
   }));
 }
 
-// Lapsed sites by the year they were last classified.
-export function lapsedByYear(catalog, item, sites) {
+// The year a site last had this item classified, or null if never.
+export function lastClassifiedYear(record) {
+  if (!hasRecord(record)) return null;
+  return record.lastYear ?? Math.max(...Object.keys(record.statuses).map(Number));
+}
+
+// Sites by the year they were last classified, oldest first.
+export function lastClassifiedByYear(item, sites) {
   const years = new Map();
   for (const site of sites) {
-    const record = site.items[item.id];
-    if (coverageOf(catalog, item, record) !== "lapsed") continue;
-    const year = record.lastYear ?? Math.max(...Object.keys(record.statuses).map(Number));
-    years.set(year, (years.get(year) ?? 0) + 1);
+    const year = lastClassifiedYear(site.items[item.id]);
+    if (year !== null) years.set(year, (years.get(year) ?? 0) + 1);
   }
   return [...years].sort(([a], [b]) => a - b);
 }

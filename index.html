@@ -27,6 +27,7 @@
   <link rel="stylesheet" href="css/theme.css" />
   <link rel="stylesheet" href="css/layout.css" />
   <link rel="stylesheet" href="css/popup.css" />
+  <link rel="stylesheet" href="css/scorecards.css" />
 </head>
 
 <body>
@@ -43,12 +44,35 @@
          The classification explorer only starts the first time it's opened. -->
     <div class="appFrame">
       <calcite-tab-nav class="viewTabs" id="viewTabs" scale="s">
-        <calcite-tab-title data-view="monitoring" selected>Monitoring explorer</calcite-tab-title>
+        <calcite-tab-title data-view="map" selected>Map Explorer</calcite-tab-title>
+        <calcite-tab-title data-view="monitoring">Monitoring explorer</calcite-tab-title>
         <calcite-tab-title data-view="classification">EA Classification explorer</calcite-tab-title>
+        <calcite-tab-title data-view="scorecards">Scorecards</calcite-tab-title>
       </calcite-tab-nav>
 
       <div class="views">
-    <section class="view appBody" data-view="monitoring">
+    <!-- The Southern Data Hub web map, set up in ArcGIS Online. -->
+    <section class="view appBody" data-view="map">
+      <aside class="sidePanel pickerPanel" aria-label="Map layers">
+        <div class="pickerScroll">
+          <arcgis-layer-list id="webLayerList" reference-element="#webMap" show-heading heading-level="2" label="Map layers" visibility-appearance="checkbox"></arcgis-layer-list>
+        </div>
+      </aside>
+      <main class="mapArea">
+        <div class="mapColumn">
+          <arcgis-map id="webMap">
+            <arcgis-zoom slot="top-left"></arcgis-zoom>
+            <arcgis-scale-bar slot="bottom-left" unit="metric"></arcgis-scale-bar>
+          </arcgis-map>
+        </div>
+      </main>
+      <aside class="sidePanel detailsPanel" aria-label="Legend">
+        <p class="summary" id="webMapNote">Data from the Southern Data Hub map, shown for the 11 CaBA partnerships only. Switch layers on in the list. Layers with nothing in the selected area are left out.</p>
+        <arcgis-legend reference-element="#webMap"></arcgis-legend>
+      </aside>
+    </section>
+
+    <section class="view appBody" data-view="monitoring" hidden>
       <aside class="sidePanel pickerPanel" aria-label="Choose a year and metric">
         <div class="yearFilter">
           <calcite-label layout="inline-space-between" scale="s">
@@ -118,8 +142,45 @@
         <p class="summary">Loading…</p>
       </aside>
     </section>
+
+    <!-- Catchment Health scorecards, ported from the National River Survey dashboard. -->
+    <section class="view view--scorecards" data-view="scorecards" hidden>
+      <!-- Opens with the scorecard, when a waterbody is clicked. -->
+      <aside class="sidePanel scorecardSources" id="scorecardSources" aria-label="Data sources for each measure" hidden></aside>
+      <div class="scorecardsMapColumn">
+        <arcgis-map id="scorecardsMap">
+          <arcgis-zoom slot="top-left"></arcgis-zoom>
+          <calcite-button id="deselectWaterbody" slot="bottom-right" kind="neutral" scale="s" icon-start="x" hidden>Deselect water body</calcite-button>
+          <arcgis-scale-bar slot="bottom-left" unit="metric"></arcgis-scale-bar>
+        </arcgis-map>
+        <p class="mapHint" id="scorecardsHint">Click a waterbody to see its scorecard</p>
+        <div class="mapKey" id="scorecardsKey" aria-label="Map key" hidden></div>
+      </div>
+
+      <!-- Opens when a waterbody is clicked. -->
+      <calcite-panel class="scorecardPanel" id="healthPanel" heading="Catchment Health" closable hidden>
+        <calcite-action slot="header-actions-end" id="healthPdf" icon="download" text="Download PDF" title="Download a PDF report of this waterbody&#39;s Catchment Health scorecard" disabled></calcite-action>
+        <div class="scorecardBody">
+          <calcite-label class="scorecardPeriod" layout="inline-space-between" scale="s">
+            Period
+            <calcite-select id="scorecardPeriod" label="Period" scale="s"></calcite-select>
+          </calcite-label>
+          <p class="muted hint" id="healthCoverage"></p>
+          <div class="wheelWrap">
+            <svg class="wheelSvg" id="healthWheel" viewBox="0 0 300 300" role="img"></svg>
+          </div>
+          <div class="ratingKey" id="healthKey"></div>
+          <div class="healthDetail" id="healthDetail"></div>
+        </div>
+      </calcite-panel>
+    </section>
       </div>
     </div>
+
+    <calcite-alert id="pdfErrorAlert" kind="danger" icon="exclamation-mark-triangle" auto-close label="PDF report failed">
+      <div slot="title">Couldn't create the PDF</div>
+      <div slot="message">Something went wrong generating the report - see the browser console for details.</div>
+    </calcite-alert>
   </calcite-shell>
 
   <script type="module" src="js/main.js"></script>

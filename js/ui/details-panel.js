@@ -25,7 +25,7 @@ function legendRow(markerNode, label) {
 function legend(metric, sources, theme, summaries) {
   const list = el("ul", "legend");
   const scaled = sources.filter(({ mapping }) => isOnScale(mapping, metric));
-  const hasEstimated = scaled.some(({ mapping }) => mapping.bands || mapping.limits);
+  const hasEstimated = scaled.some(({ mapping }) => (mapping.bands || mapping.limits) && !mapping.limitsAreExact);
   const hasExact = scaled.some(({ mapping }) => mapping.valueType !== "banded");
 
   // With no sources to draw, the bands are still worth showing.
@@ -42,7 +42,7 @@ function legend(metric, sources, theme, summaries) {
     list.append(legendRow(marker("outline"), "Outlined waterbody: no readings"));
   }
   if (hasExact) list.append(legendRow(marker("circle", NEUTRAL), "Circle: exact reading"));
-  if (hasEstimated) list.append(legendRow(marker("diamond", NEUTRAL), "Diamond: estimated from a range or limit"));
+  if (hasEstimated) list.append(legendRow(marker("diamond", NEUTRAL), "Diamond: recorded as a range or limit, shown at the bottom of it"));
   if (sources.some(({ mapping }) => !isOnScale(mapping, metric))) {
     list.append(legendRow(marker("circle", NEUTRAL), "Reading can't be compared: no common unit"));
   }

@@ -6,7 +6,12 @@
 export async function loadCatalog() {
   const response = await fetch("data/catalog.json", { cache: "no-cache" });
   if (!response.ok) throw new Error(`data/catalog.json returned ${response.status}`);
-  return response.json();
+  const catalog = await response.json();
+  // Readings only see their own mapping, so the dataset's setting is copied in.
+  for (const dataset of catalog.datasets) {
+    for (const mapping of Object.values(dataset.metrics)) mapping.limitsAreExact = Boolean(dataset.limitsAreExact);
+  }
+  return catalog;
 }
 
 export async function loadClipArea(catalog) {

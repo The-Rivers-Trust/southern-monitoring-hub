@@ -22,9 +22,9 @@ import { getMetric, useCatalog } from "./metrics.js";
 import { getTheme, onThemeChange } from "../theme.js";
 import { dateRangeDescription, initDateRange, onDateRangeChange } from "./date-range.js";
 import { fetchEquipment, getLayer } from "./nrs-service.js";
-import { computeScorecard, riverflyWhere } from "./waterbody-data.js";
+import { computeScorecard, RIVERFLY_ASSESSED, riverflyWhere } from "./waterbody-data.js";
 import { bandForRank, catchmentHealthRanks, catchmentHealthOverallRank } from "./ratings.js";
-import { subDetailLines, subSourceLines } from "./scorecard-text.js";
+import { BREAKDOWNS, breakdownRows, isSignsLine, subDetailLines, subSourceLines } from "./scorecard-text.js";
 import { renderCatchmentHealthWheel, renderRatingLegend } from "./charts/wheels.js";
 import { renderBarChart, bucketGranularity } from "./charts/bar-chart.js";
 import { loadJsPdf, safeFileName } from "./pdf-common.js";
@@ -34,6 +34,8 @@ import { areaExtent } from "../map/extents.js";
 import { ensureYearLoaded, loadReadings } from "../data/readings-store.js";
 import { checkSources, hubSites, loadScorecardSources, useHubSources, usesSource } from "./hub-sources.js";
 import { renderSourcesPanel } from "./sources-panel.js";
+import { renderGuide } from "./guide.js";
+import { hubCatalog, scorecardFile } from "./hub-sources.js";
 import { useRules } from "./rules.js";
 import { METRICS } from "./config.js";
 
@@ -76,6 +78,8 @@ export async function initScorecardsTab(els, { catalog, area, waterbodies, partn
   renderRatingLegend(els.health.keyEl);
   renderHealthWheel();
   initDateRange(els.dates);
+  // Ready before the map is, so an early click isn't lost.
+  els.guide.openEls.forEach((button) => button.addEventListener("click", openGuide));
 
   const { mapEl } = els;
   mapEl.basemap = MAP.basemap[getTheme()];
@@ -176,6 +180,21 @@ export async function initScorecardsTab(els, { catalog, area, waterbodies, partn
 
   applyPartnership();
   await hubData;
+}
+
+// The data and thresholds guide, built fresh each time from the files,
+// so it reflects the current rules and period.
+async function openGuide() {
+  const { dialogEl, bodyEl } = state.els.guide;
+  bodyEl.innerHTML = `<p class="summary">Loading…</p>`;
+  dialogEl.open = true;
+  await state.hubData;
+  const file = scorecardFile();
+  if (!file) {
+    bodyEl.innerHTML = `<p class="summary isError">The scorecard settings couldn't be loaded.</p>`;
+    return;
+  }
+  renderGuide(bodyEl, { file, catalog: hubCatalog() });
 }
 
 // The sources panel, redrawn only when what's available changes, so
@@ -406,7 +425,7 @@ async function applyRiverflyFilter() {
     countForKey("riverfly", 0);
     return;
   }
-  const where = riverflyWhere("breachType = 'Confirmed' OR breach = 0");
+  const where = riverflyWhere(RIVERFLY_ASSESSED);
   try {
     const ids = await layer.queryObjectIds({ where, geometry: state.selected.geometry, spatialRelationship: "intersects" });
     if (request !== state.requests.riverfly) return;
@@ -611,7 +630,8 @@ function showThemeDetail(spoke, band, path) {
     detailEl.append(section); // attached first, so its chart can measure itself
     section.innerHTML = `
       <div class="healthSectionHeader"><span>${escapeHtml(sub.label)}</span>${badge(bandForRank(ranks[sub.key]))}</div>
-      ${subDetailLines(sub.key, state.scorecard).map((line) => `<p class="healthLine">${escapeHtml(line)}</p>`).join("")}`;
+      ${subDetailLines(sub.key, state.scorecard).filter((line) => !isSignsLine(line)).map((line) => `<p class="healthLine">${escapeHtml(line)}</p>`).join("")}`;
+    if (BREAKDOWNS[sub.key]) section.insertAdjacentHTML("beforeend", signsTable(breakdownRows(state.scorecard, sub.key), BREAKDOWNS[sub.key]));
     const metric = getMetric(sub.key);
     if (metric) {
       width = renderBarChart(section, {
@@ -622,6 +642,17 @@ function showThemeDetail(spoke, band, path) {
     const meta = subSourceLines(sub.key, state.scorecard);
     if (meta.length) section.insertAdjacentHTML("beforeend", `<div class="healthMeta">${meta.map((l) => `<div>${escapeHtml(l)}</div>`).join("")}</div>`);
   }
+}
+
+// A survey-counted measure's breakdown (pollution signs, wildlife
+// species), with how many surveys showed each.
+function signsTable(rows, { column, note }) {
+  if (!rows.length) return "";
+  return `<table class="signsTable">
+    <thead><tr><th scope="col">${escapeHtml(column)}</th><th scope="col">Surveys</th><th scope="col">Share of surveys</th></tr></thead>
+    <tbody>${rows.map((r) => `<tr${r.surveys ? "" : ' class="isNone"'}><th scope="row">${escapeHtml(r.label)}</th><td>${r.surveys.toLocaleString("en-GB")}</td><td>${r.share}</td></tr>`).join("")}</tbody>
+  </table>
+  <p class="healthLine signsNote">${escapeHtml(note)}</p>`;
 }
 
 function handleThemeChange(theme) {

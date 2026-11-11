@@ -25,10 +25,11 @@ export function determinandRank(metricKey, value) {
   return i === -1 ? bands.length - 1 : i;
 }
 
-export function wildlifeRank(speciesCount) {
-  if (isMissing(speciesCount)) return null;
-  const i = SCORECARD.wildlifeRichnessMin.findIndex((min) => speciesCount >= min);
-  return i === -1 ? SCORECARD.wildlifeRichnessMin.length : i;
+// The wildlife score, 0 to 1: higher is better.
+export function wildlifeRank(score) {
+  if (isMissing(score)) return null;
+  const i = SCORECARD.wildlifeScoreMin.findIndex((min) => score >= min);
+  return i === -1 ? SCORECARD.wildlifeScoreMin.length : i;
 }
 
 export function invasiveRank(speciesCount) {
@@ -46,6 +47,14 @@ export function invertebrateRank(sampleCount, siteCount, breachCount) {
   const rate = breachCount / sampleCount;
   const i = SCORECARD.invertebrateBreachRateMax.findIndex((max) => rate <= max);
   return i === -1 ? SCORECARD.invertebrateBreachRateMax.length : i;
+}
+
+// Visible pollution: the share of surveys with any sign, once there's
+// enough coverage (decided by the caller).
+export function visiblePollutionRank(rate) {
+  if (isMissing(rate) || !SCORECARD.visiblePollutionRateMax) return null;
+  const i = SCORECARD.visiblePollutionRateMax.findIndex((max) => rate <= max);
+  return i === -1 ? SCORECARD.visiblePollutionRateMax.length : i;
 }
 
 // Zero delivered interventions is Bad, or "no data" when Action's
@@ -78,6 +87,7 @@ export function catchmentHealthRanks(scorecard) {
     invasives: scorecard.invasiveRank,
     invertebrates: scorecard.invertebrateRank,
     action: scorecard.actionRank,
+    visiblePollution: scorecard.visiblePollutionRank,
   } : null;
 }
 

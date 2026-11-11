@@ -16,7 +16,7 @@ import { getMetric } from "./metrics.js";
 import { bandForRank, catchmentHealthRanks, themeRank, catchmentHealthOverallRank } from "./ratings.js";
 import { catchmentHealthWheelImage, WHEEL_IMAGE_ASPECT } from "./charts/wheels.js";
 import { barChartImage } from "./charts/bar-chart.js";
-import { dataSourceRows, subDetailLines } from "./scorecard-text.js";
+import { BREAKDOWNS, breakdownRows, dataSourceRows, isSignsLine, subDetailLines } from "./scorecard-text.js";
 import { rect, text, rgb } from "./pdf-common.js";
 
 const PAGE = { width: 210, height: 297, margin: 18 };
@@ -252,7 +252,8 @@ export function buildCatchmentHealthPdf(JsPDF, { waterbodyName, waterBodyId, sco
     const col = { measure: M, rating: M + 40, evidence: M + 74 };
     const evidenceW = PAGE.width - M - col.evidence;
     const rows = spoke.subs.map((sub) => {
-      const [first, ...rest] = subDetailLines(sub.key, scorecard);
+      // Visible pollution's signs get their own table, below.
+      const [first, ...rest] = subDetailLines(sub.key, scorecard).filter((line) => !isSignsLine(line));
       return {
         sub,
         band: bandForRank(ranks[sub.key]),
@@ -282,6 +283,36 @@ export function buildCatchmentHealthPdf(JsPDF, { waterbodyName, waterBodyId, sco
       y += height;
     }
     rule(doc, y);
+    y += 9;
+    spoke.subs.filter((sub) => BREAKDOWNS[sub.key]).forEach((sub) => signsTable(sub.key));
+  };
+
+  // A survey-counted measure's breakdown: label, surveys, share.
+  const signsTable = (subKey) => {
+    const signs = breakdownRows(scorecard, subKey);
+    if (!signs.length) return;
+    const { title, column } = BREAKDOWNS[subKey];
+    const total = subKey === "wildlife" ? scorecard.wildlifeSurveys : scorecard.visiblePollutionSurveys;
+    const col = { sign: M, surveys: M + 74, share: M + 104 };
+    const rowH = 6;
+    ensure(10 + rowH * (signs.length + 1) + 8);
+    text(doc, title, M, y, { fontSize: 9.5, bold: true, color: COLOR.ink });
+    y += 5;
+    text(doc, column, col.sign, y, { fontSize: 7.5, bold: true, color: COLOR.muted });
+    text(doc, "Surveys", col.surveys, y, { fontSize: 7.5, bold: true, color: COLOR.muted });
+    text(doc, "Share of surveys", col.share, y, { fontSize: 7.5, bold: true, color: COLOR.muted });
+    y += 2;
+    for (const sign of signs) {
+      rule(doc, y);
+      const baseline = y + 4.2;
+      text(doc, sign.label, col.sign, baseline, { fontSize: 8.5, color: sign.surveys ? COLOR.ink : COLOR.muted });
+      text(doc, sign.surveys.toLocaleString("en-GB"), col.surveys, baseline, { fontSize: 8.5, color: COLOR.body });
+      text(doc, sign.share, col.share, baseline, { fontSize: 8.5, color: COLOR.body });
+      y += rowH;
+    }
+    rule(doc, y);
+    y += 4;
+    text(doc, `Out of ${total.toLocaleString("en-GB")} surveys. A survey can ${subKey === "wildlife" ? "record more than one species" : "show more than one sign"}.`, M, y, { fontSize: 7.5, italic: true, color: COLOR.muted });
     y += 9;
   };
 

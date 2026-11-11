@@ -214,6 +214,11 @@ const TAB_STARTS = {
     hintEl: document.getElementById("scorecardsHint"),
     keyEl: document.getElementById("scorecardsKey"),
     sourcesEl: document.getElementById("scorecardSources"),
+    guide: {
+      dialogEl: document.getElementById("scorecardGuide"),
+      bodyEl: document.getElementById("scorecardGuideBody"),
+      openEls: [document.getElementById("scorecardGuideButton"), document.getElementById("healthGuide")],
+    },
     deselectEl: document.getElementById("deselectWaterbody"),
     errorAlertEl: document.getElementById("pdfErrorAlert"),
     dates: { periodEl: document.getElementById("scorecardPeriod") },

@@ -50,6 +50,7 @@
     "estimates": "A range counts at its bottom and a below-limit reading as zero, so a summary is never pushed up by a guess. A dataset with limitsAreExact (an accredited laboratory) has its limits treated as exact readings, not estimates.",
     "bands": "On a banded field every value has a band. On a number field, bands list only the special values, such as an instrument's limits, and every other value is an exact reading.",
     "scale": "Each metric's breaks are the National River Survey dashboard's agreed thresholds, as upper bounds for Low, Slightly Elevated, Elevated and High. A reading exactly on a threshold falls in the lower band. Anything above the last is Very High.",
+    "observationFields": "Fields loaded with a dataset's records for uses other than a determinand, such as the scorecard's Visible Pollution signs and Wildlife sightings.",
     "toMetricUnit": "Multiply the reading by this to get the metric's unit. Null means it cannot be converted: show the raw reading and leave it out of the shared colour scale."
   },
   "metrics": [
@@ -64,6 +65,7 @@
   "datasets": [
     {
       "id": "global_data_set",
+      "observationFields": ["ecological_water_surface"],
       "label": "FreshWater Watch",
       "url": "https://services3.arcgis.com/SQtySBftABENTpkx/arcgis/rest/services/Global_Data_Set_(vs)_Public_view/FeatureServer/0",
       "structure": {
@@ -347,6 +349,7 @@
     },
     {
       "id": "river_guardians",
+      "observationFields": ["pollutionEvidenceLitterOrFlyTipping", "pollutionEvidenceSewageRelatedLitter", "pollutionEvidenceOilySheen", "pollutionEvidenceFoam", "pollutionEvidenceSewageFungus", "pollutionEvidenceSmotheringAlgae", "pollutionEvidenceUnpleasantOdour", "pollutionEvidenceOther", "wildlifeNone", "wildlifeOtter", "wildlifeWaterVole", "wildlifeKingfisher", "wildlifeGreyWagtail", "wildlifeHeron", "wildlifeFish", "wildlifeDragonfliesOrDamselflies", "wildlifeDuck", "wildlifeMoorhenOrCoot", "wildlifeGoose", "wildlifeSwan", "wildlifeOther"],
       "label": "River Guardians",
       "url": "https://services3.arcgis.com/Bb8lfThdhugyc4G3/arcgis/rest/services/RiverGuardiansData/FeatureServer/0",
       "structure": {

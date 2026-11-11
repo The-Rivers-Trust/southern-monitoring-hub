@@ -150,6 +150,7 @@
       <div class="scorecardsMapColumn">
         <arcgis-map id="scorecardsMap">
           <arcgis-zoom slot="top-left"></arcgis-zoom>
+          <calcite-button id="scorecardGuideButton" slot="top-left" kind="neutral" scale="s" icon-start="information">Data and thresholds guide</calcite-button>
           <calcite-button id="deselectWaterbody" slot="bottom-right" kind="neutral" scale="s" icon-start="x" hidden>Deselect water body</calcite-button>
           <arcgis-scale-bar slot="bottom-left" unit="metric"></arcgis-scale-bar>
         </arcgis-map>
@@ -159,6 +160,7 @@
 
       <!-- Opens when a waterbody is clicked. -->
       <calcite-panel class="scorecardPanel" id="healthPanel" heading="Catchment Health" closable hidden>
+        <calcite-action slot="header-actions-end" id="healthGuide" icon="information" text="Data and thresholds guide" title="How this scorecard is worked out: data sources, thresholds and data requirements"></calcite-action>
         <calcite-action slot="header-actions-end" id="healthPdf" icon="download" text="Download PDF" title="Download a PDF report of this waterbody&#39;s Catchment Health scorecard" disabled></calcite-action>
         <div class="scorecardBody">
           <calcite-label class="scorecardPeriod" layout="inline-space-between" scale="s">
@@ -176,6 +178,10 @@
     </section>
       </div>
     </div>
+
+    <calcite-dialog id="scorecardGuide" heading="Scorecard data and threshold guide" description="What feeds each measure, how it's counted and rated, and the data it needs" modal>
+      <div class="guide" id="scorecardGuideBody"></div>
+    </calcite-dialog>
 
     <calcite-alert id="pdfErrorAlert" kind="danger" icon="exclamation-mark-triangle" auto-close label="PDF report failed">
       <div slot="title">Couldn't create the PDF</div>

@@ -79,7 +79,8 @@ async function fetchPartnership(url, partnership, { where, outFields, objectIdFi
 
 async function loadServiceDataset(dataset, area, Field) {
   const active = Object.values(dataset.metrics).filter((mapping) => mapping.active);
-  const outFields = [...new Set([...Object.values(dataset.fields), ...active.map((mapping) => mapping.field)])];
+  // observationFields: loaded for other uses, such as the scorecard.
+  const outFields = [...new Set([...Object.values(dataset.fields), ...active.map((mapping) => mapping.field), ...(dataset.observationFields ?? [])])];
   const options = { where: baseWhere(dataset), outFields, objectIdField: dataset.fields.objectId };
 
   // All or nothing: a partly loaded map would look complete but not be.

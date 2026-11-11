@@ -351,3 +351,170 @@
   font-size: 12px;
   line-height: 14px;
 }
+
+/* ---- Data and thresholds guide ---- */
+#scorecardGuide {
+  --calcite-dialog-size-x: min(980px, 94vw);
+  --calcite-dialog-size-y: 88vh;
+}
+
+.guide {
+  padding: var(--space-2) var(--space-4) var(--space-4);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+.guide h3 {
+  margin: var(--space-4) 0 var(--space-2);
+  font-size: 1rem;
+}
+
+.guide h4 {
+  margin: 0 0 var(--space-1);
+  font-size: 0.9375rem;
+}
+
+.guide h5 {
+  margin: var(--space-3) 0 var(--space-1);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.guide p,
+.guide ul {
+  margin: 0 0 var(--space-2);
+}
+
+.guide ul {
+  padding-inline-start: 20px;
+}
+
+.guideTheme {
+  margin-top: var(--space-4);
+  padding-top: var(--space-2);
+  border-top: 2px solid var(--border);
+}
+
+.guideMeasure {
+  margin-top: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  scroll-margin-top: var(--space-2);
+}
+
+.guideTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.guideTable th,
+.guideTable td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.guideTable tr:first-child th {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.guideTable th[scope="row"] {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.guideSwatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-inline-end: 6px;
+  border-radius: 50%;
+}
+
+.guideSwatch.isNoData {
+  background: var(--calcite-color-foreground-3);
+  border: 1px solid var(--border);
+  box-sizing: border-box;
+}
+
+.guideBandKey {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  padding: 0 !important;
+  list-style: none;
+}
+
+.guideContents ul {
+  columns: 2;
+  column-gap: var(--space-4);
+}
+
+.guideContents a {
+  color: var(--calcite-color-brand);
+}
+
+.guideProvisional {
+  padding: var(--space-2) var(--space-3);
+  background: color-mix(in srgb, var(--calcite-color-status-warning) 12%, transparent);
+  border-inline-start: 3px solid var(--calcite-color-status-warning);
+}
+
+@media (max-width: 700px) {
+  .guideContents ul {
+    columns: 1;
+  }
+
+  .guideTable {
+    display: block;
+    overflow-x: auto;
+  }
+}
+
+/* Visible pollution: every sign seen. */
+.signsTable {
+  width: 100%;
+  margin-top: 6px;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+
+.signsTable th,
+.signsTable td {
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+
+.signsTable thead th {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.signsTable tbody th {
+  font-weight: 400;
+  color: var(--text-primary);
+}
+
+.signsTable td {
+  font-variant-numeric: tabular-nums;
+}
+
+.signsNote {
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+.signsTable tr.isNone th,
+.signsTable tr.isNone td {
+  color: var(--text-muted);
+}

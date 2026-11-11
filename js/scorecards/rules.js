@@ -10,7 +10,7 @@ import { METRICS, SCORECARD } from "./config.js";
 const STEPS = ["high", "good", "moderate", "poor"];
 
 // The direction each rule is written for in ratings.js.
-const DIRECTIONS = { wildlife: "higher", invasives: "lower", invertebrates: "lower", action: "higher" };
+const DIRECTIONS = { wildlife: "higher", invasives: "lower", invertebrates: "lower", action: "higher", visiblePollution: "lower" };
 
 // A number, or a fraction written as "1/20".
 function figure(value) {
@@ -43,9 +43,16 @@ export function useRules(scorecard) {
     metric.aggregation = rating?.statistic === "median" ? "median" : "mean";
   }
 
-  SCORECARD.wildlifeRichnessMin = steps("wildlife", measures.wildlife.rating, problems);
+  SCORECARD.wildlifeScoreMin = steps("wildlife", measures.wildlife.rating, problems);
+  SCORECARD.wildlifeSpecies = measures.wildlife.species ?? [];
+  if (!SCORECARD.wildlifeSpecies.length) problems.push("wildlife: list the indicator species");
+  for (const source of measures.wildlife.sources) {
+    Object.values(source.signs ?? {}).filter((label) => !SCORECARD.wildlifeSpecies.includes(label))
+      .forEach((label) => problems.push(`wildlife, ${source.name}: ${label} isn't one of the listed species`));
+  }
   SCORECARD.invasiveRichnessMax = steps("invasives", measures.invasives.rating, problems);
   SCORECARD.actionCountMin = steps("action", measures.action.rating, problems);
+  if (measures.visiblePollution) SCORECARD.visiblePollutionRateMax = steps("visiblePollution", measures.visiblePollution.rating, problems);
   const whenNone = measures.action.rating.whenNone ?? "bad";
   if (!["no data", "bad"].includes(whenNone)) problems.push('action: whenNone should be "no data" or "bad"');
   SCORECARD.actionNoneIsNoData = whenNone === "no data";

@@ -17,19 +17,53 @@
     "statistic: mean or median, how a waterbody's readings are combined before rating.",
     "whenNone: what a count of none means for a measure that counts things (only Action uses it so far). \"no data\" leaves it unrated, shown grey; \"bad\" rates it Bad.",
     "A theme's rating is the average of its measures' ratings, and the overall rating the average of the themes'.",
+    "Wildlife's score is the share of surveys recording at least one indicator species, times how evenly the sightings spread across the species (the effective number of species, worked out from each species' share of the sightings, divided by the number of species). 20% of surveys with an indicator, all of them fish, scores 20% x 1/7 = 2.9%; the same 20% spread evenly across all seven species scores 20%. Its thresholds were set from the 2026 River Guardians data.",
+    "Visible Pollution's thresholds were set from the 2026 data: across the 54 southern waterbodies with enough surveys, the median share with a visible sign was 17%.",
     "These thresholds are a provisional first pass from the National River Survey dashboard, not a reviewed standard."
   ],
   "valueTypes": {
     "absolute": "Every value is an exact reading, such as 0.34.",
     "range": "Every value is a range or a step on a colour chart, such as 2-5. Each counts at the bottom of its range, so 2-5 counts as 2.",
-    "mixed": "Mostly exact readings, with some at a limit of detection, such as 0 meaning below 0.04. Below the limit counts as 0; beyond it counts at the limit."
+    "mixed": "Mostly exact readings, with some at a limit of detection, such as 0 meaning below 0.04. Below the limit counts as 0; beyond it counts at the limit.",
+    "flags": "One Yes/No field per sign or species, recorded as 1 or 0 (or Yes) on every survey. A survey shows it when the field is 1 or Yes. List each field and the name to show for it under signs. answeredFields, if given, are the fields of which at least one is ticked when the question was answered; other surveys are left out.",
+    "keywords": "A free-text answer that can name several things. A survey shows a sign when its answer contains any listed keyword, ignoring capitals, spaces and underscores, so \"Oily sheen\" also finds \"Oily_sheen\". A blank answer isn't counted as a survey."
   },
   "coverage": {
-    "about": "A waterbody needs at least this much data in the period before its nutrient, wildlife and invasives measures are rated. Nutrients count sites and readings across all their sources; wildlife and invasives count National River Survey sites and surveys.",
+    "about": "A waterbody needs at least this much data in the period before its nutrient, wildlife, invasives and visible pollution measures are rated. Nutrients count sites and readings, and wildlife and visible pollution sites and surveys, across all their sources; invasives counts National River Survey sites and surveys.",
     "minSites": 2,
     "minReadings": 6
   },
   "measures": {
+    "visiblePollution": {
+      "spoke": "Recreation",
+      "label": "Visible Pollution",
+      "rating": {"measure": "share of surveys with any visible sign of pollution", "better": "lower", "high": 0.05, "good": 0.15, "moderate": 0.25, "poor": 0.4},
+      "sources": [
+        {
+          "dataset": "river_guardians",
+          "name": "River Guardians",
+          "fields": ["pollutionEvidenceLitterOrFlyTipping", "pollutionEvidenceSewageRelatedLitter", "pollutionEvidenceOilySheen", "pollutionEvidenceFoam", "pollutionEvidenceSewageFungus", "pollutionEvidenceSmotheringAlgae", "pollutionEvidenceUnpleasantOdour", "pollutionEvidenceOther"],
+          "values": "flags",
+          "signs": {
+            "pollutionEvidenceLitterOrFlyTipping": "Litter or fly-tipping",
+            "pollutionEvidenceSewageRelatedLitter": "Sewage-related litter",
+            "pollutionEvidenceOilySheen": "Oily sheen",
+            "pollutionEvidenceFoam": "Foam",
+            "pollutionEvidenceSewageFungus": "Sewage fungus",
+            "pollutionEvidenceSmotheringAlgae": "Smothering algae",
+            "pollutionEvidenceUnpleasantOdour": "Unpleasant odour",
+            "pollutionEvidenceOther": "Other pollution"
+          }
+        },
+        {
+          "dataset": "global_data_set",
+          "name": "FreshWater Watch",
+          "fields": ["ecological_water_surface"],
+          "values": "keywords",
+          "signs": {"Foam": "Foam", "Slurry": "Slurry", "Oily sheen": "Oily sheen", "Floating algae": "Floating algae"}
+        }
+      ]
+    },
     "phosphate": {
       "spoke": "Nutrients and Sediment",
       "label": "Orthophosphate",
@@ -94,24 +128,40 @@
     "wildlife": {
       "spoke": "Biodiversity",
       "label": "Wildlife",
-      "rating": {"measure": "species seen", "better": "higher", "high": 7, "good": 5, "moderate": 3, "poor": 1},
+      "rating": {"measure": "wildlife score: share of surveys with an indicator species, times how evenly sightings spread across the species", "better": "higher", "high": 0.15, "good": 0.09, "moderate": 0.04, "poor": 0.01},
+      "species": ["Otter", "Water vole", "Kingfisher", "Grey wagtail", "Heron", "Fish", "Dragonflies and damselflies"],
       "sources": [
         {
           "dataset": "national_river_survey",
           "name": "National River Survey",
-          "fields": [
-            "wildlife_otter",
-            "wildlife_dipper",
-            "wildlife_water_vole",
-            "wildlife_kingfisher",
-            "wildlife_dragonflies_damselflies",
-            "wildlife_heron",
-            "wildlife_fish",
-            "wildlife_grey_wagtail",
-            "wildlife_bat",
-            "wildlife_mayflies_caddisflies"
-          ],
-          "values": "absolute"
+          "fields": ["wildlife_otter", "wildlife_water_vole", "wildlife_kingfisher", "wildlife_grey_wagtail", "wildlife_heron", "wildlife_fish", "wildlife_dragonflies_damselflies"],
+          "values": "flags",
+          "signs": {
+            "wildlife_otter": "Otter",
+            "wildlife_water_vole": "Water vole",
+            "wildlife_kingfisher": "Kingfisher",
+            "wildlife_grey_wagtail": "Grey wagtail",
+            "wildlife_heron": "Heron",
+            "wildlife_fish": "Fish",
+            "wildlife_dragonflies_damselflies": "Dragonflies and damselflies"
+          }
+        },
+        {
+          "dataset": "river_guardians",
+          "name": "River Guardians",
+          "fields": ["wildlifeOtter", "wildlifeWaterVole", "wildlifeKingfisher", "wildlifeGreyWagtail", "wildlifeHeron", "wildlifeFish", "wildlifeDragonfliesOrDamselflies"],
+          "values": "flags",
+          "signs": {
+            "wildlifeOtter": "Otter",
+            "wildlifeWaterVole": "Water vole",
+            "wildlifeKingfisher": "Kingfisher",
+            "wildlifeGreyWagtail": "Grey wagtail",
+            "wildlifeHeron": "Heron",
+            "wildlifeFish": "Fish",
+            "wildlifeDragonfliesOrDamselflies": "Dragonflies and damselflies"
+          },
+          "answeredFields": ["wildlifeNone", "wildlifeOtter", "wildlifeWaterVole", "wildlifeKingfisher", "wildlifeGreyWagtail", "wildlifeHeron", "wildlifeFish", "wildlifeDragonfliesOrDamselflies", "wildlifeDuck", "wildlifeMoorhenOrCoot", "wildlifeGoose", "wildlifeSwan", "wildlifeOther"],
+          "answeredNote": "A survey counts only if it answered the wildlife question: None, or any animal ticked. Ducks, moorhens, coots, geese, swans and Other show it was answered but aren't indicator species."
         }
       ]
     },
@@ -146,7 +196,7 @@
     "action": {
       "spoke": "River Recovery",
       "label": "Action",
-      "rating": {"measure": "delivered interventions", "better": "higher", "high": 21, "good": 11, "moderate": 4, "poor": 1, "whenNone": "no data"},
+      "rating": {"measure": "delivered interventions", "better": "higher", "high": 20, "good": 15, "moderate": 10, "poor": 5, "whenNone": "no data"},
       "sources": [
         {"dataset": "nbs_interventions", "name": "Nature-Based Solutions Interventions (NBS)", "fields": ["Status"], "values": "absolute"}
       ]

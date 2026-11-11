@@ -102,7 +102,8 @@ export const RATING_BANDS = [
 export const SCORECARD = {
   nrsMinSites: null,
   nrsMinSurveys: null,
-  wildlifeRichnessMin: null,
+  wildlifeScoreMin: null,
+  wildlifeSpecies: null, // the indicator species, from data/scorecard.json
   invasiveRichnessMax: null,
   invertebrateMinSites: null,
   invertebrateMinSamples: null,
@@ -110,6 +111,7 @@ export const SCORECARD = {
   riverflyFloor: null,
   actionCountMin: null,
   actionNoneIsNoData: null, // true: no delivered interventions is "no data", not Bad
+  visiblePollutionRateMax: null,
 
   // The year the period drop-down offers, whole or by quarter.
   periodYear: 2026,
@@ -151,7 +153,7 @@ export const HUB_SOURCE_SYMBOLS = {
 // placeholders. Sub keys match catchmentHealthRanks() in ratings.js.
 export const CATCHMENT_HEALTH_SPOKES = [
   {
-    key: "recreation", label: "Recreation", shortLabel: "REC", color: { dark: "#c98500", light: "#eda100" },
+    key: "recreation", label: "Recreation", shortLabel: "REC", color: { dark: "#c98500", light: "#eda100" }, wired: true,
     subs: [
       { key: "visiblePollution", label: "Visible Pollution", shortLabel: "VIS" },
       { key: "ecoli", label: "E.coli", shortLabel: "ECOLI" },

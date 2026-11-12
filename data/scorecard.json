@@ -28,6 +28,10 @@
     "flags": "One Yes/No field per sign or species, recorded as 1 or 0 (or Yes) on every survey. A survey shows it when the field is 1 or Yes. List each field and the name to show for it under signs. answeredFields, if given, are the fields of which at least one is ticked when the question was answered; other surveys are left out.",
     "keywords": "A free-text answer that can name several things. A survey shows a sign when its answer contains any listed keyword, ignoring capitals, spaces and underscores, so \"Oily sheen\" also finds \"Oily_sheen\". A blank answer isn't counted as a survey."
   },
+  "sites": {
+    "about": "The hub's own datasets have no reliable site ID: site names are free text (with typos, and the same name used for different places), and the GPS position moves a little on every visit. So their samples within this distance of each other (directly, or through a chain of others) count as one site, named by its most common name. NRS and Riverfly use their own site IDs.",
+    "groupWithinMetres": 50
+  },
   "coverage": {
     "about": "A waterbody needs at least this much data in the period before its nutrient, wildlife, invasives and visible pollution measures are rated. Nutrients count sites and readings, and wildlife and visible pollution sites and surveys, across all their sources; invasives counts National River Survey sites and surveys.",
     "minSites": 2,

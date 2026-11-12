@@ -9,7 +9,7 @@
 
 import { el } from "../dom.js";
 import { provenanceText } from "../catalog.js";
-import { BUILT_IN } from "./hub-sources.js";
+import { BUILT_IN, siteGroupDistance } from "./hub-sources.js";
 import { CATCHMENT_HEALTH_SPOKES, INVASIVE_PLANT_FIELDS, METRICS, RATING_BANDS, SCORECARD } from "./config.js";
 import { dateRangeDescription } from "./date-range.js";
 
@@ -340,6 +340,7 @@ function generalSections(file) {
     "Every reading is converted to the measure's unit first, such as phosphorus (P) to phosphate (PO₄) by × 3.066.",
     "Suspect values (outside an instrument's plausible range) are left out.",
     "Only readings and surveys inside a waterbody's boundary count towards its scorecard. (The Monitoring explorer also counts those within 250 m of a boundary, such as in a tidal channel; the scorecard doesn't.)",
+    `What counts as a site: Angling Trust, FreshWater Watch and River Guardians have no reliable site ID, since names are typed freely (with typos, and the same name used for different places) and a phone's GPS position moves a little each visit. So their samples within ${siteGroupDistance()} m of each other count as one site, named by its most common name and drawn as one mark on the map. NRS and Riverfly use their own site IDs.`,
     "Counting at the bottom of a range keeps a rating from being pushed up by a guess, so a rating may be lower than the true value.",
   ].forEach((line) => counted.append(el("li", null, line)));
   parts.push(counted);

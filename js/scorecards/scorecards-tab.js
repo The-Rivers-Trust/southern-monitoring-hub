@@ -32,7 +32,7 @@ import { buildCatchmentHealthPdf } from "./pdf-catchment-health.js";
 import { escapeHtml, escapeSql, hexToRgbArray } from "./format.js";
 import { areaExtent } from "../map/extents.js";
 import { ensureYearLoaded, loadReadings } from "../data/readings-store.js";
-import { checkSources, hubSites, loadScorecardSources, useHubSources, usesSource } from "./hub-sources.js";
+import { checkSources, hubSites, loadScorecardSources, siteGroupDistance, useHubSources, usesSource } from "./hub-sources.js";
 import { renderSourcesPanel } from "./sources-panel.js";
 import { renderGuide } from "./guide.js";
 import { hubCatalog, scorecardFile } from "./hub-sources.js";
@@ -508,7 +508,8 @@ async function applyHubSites() {
     symbol: symbolFor(site.dataset),
     popupTemplate: {
       title: `${site.name}: ${site.site}`,
-      content: `${site.samples} sample${site.samples === 1 ? "" : "s"} in ${escapeHtml(dateRangeDescription())}<br>Measures: ${escapeHtml(site.measures.join(", "))}`,
+      content: `${site.samples} sample${site.samples === 1 ? "" : "s"} in ${escapeHtml(dateRangeDescription())}<br>Measures: ${escapeHtml(site.measures.join(", "))}`
+        + `<br><small>Samples within ${siteGroupDistance()} m of each other count as one site.</small>`,
     },
   })));
 }

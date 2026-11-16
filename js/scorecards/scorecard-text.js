@@ -6,6 +6,7 @@
 // =====================================================================
 
 import { SCORECARD } from "./config.js";
+import { getDateRange } from "./date-range.js";
 import { getMetric } from "./metrics.js";
 import { invertebrateDataSufficient } from "./ratings.js";
 import { formatNumber } from "./format.js";
@@ -15,11 +16,11 @@ const plural = (n, word, many = `${word}s`) => `${n} ${n === 1 ? word : many}`;
 const MEASURE_LABELS = {
   phosphate: "Orthophosphate", nitrate: "Nitrate", nitrite: "Nitrite", ammonia: "Ammonia", turbidity: "Turbidity",
   conductivity: "Conductivity", wildlife: "Wildlife", invasives: "Invasives", invertebrates: "Invertebrates", action: "Action",
-  visiblePollution: "Visible Pollution",
+  visiblePollution: "Visible Pollution", habitatCondition: "Habitat",
 };
 
 // Built when used: the minimums come from data/scorecard.json.
-const NRS_SHORTFALL = () => `Fewer than ${SCORECARD.nrsMinSites} sites or ${SCORECARD.nrsMinSurveys} surveys across the waterbody - not enough NRS coverage yet for a rating.`;
+const INVASIVES_SHORTFALL = () => `Fewer than ${SCORECARD.nrsMinSites} sites or ${SCORECARD.nrsMinSurveys} surveys across the waterbody (counting a MoRPh subreach as a site and a module as a survey) - not enough yet for a rating.`;
 const NUTRIENT_SHORTFALL = () => `Fewer than ${SCORECARD.nrsMinSites} sites or ${SCORECARD.nrsMinSurveys} readings across the waterbody - not enough yet for a rating.`;
 const WILDLIFE_SHORTFALL = () => `Fewer than ${SCORECARD.nrsMinSites} sites or ${SCORECARD.nrsMinSurveys} surveys across the waterbody - not enough yet for a rating.`;
 const VISIBLE_SHORTFALL = () => `Fewer than ${SCORECARD.nrsMinSites} sites or ${SCORECARD.nrsMinSurveys} surveys across the waterbody - not enough yet for a rating.`;
@@ -31,7 +32,43 @@ const offLine = (subKey, scorecard) => {
   return names.length ? [`Switched off: ${names.join(", ")}`] : [];
 };
 
-const OFF_SOURCE = { invasives: "National River Survey", invertebrates: "Riverfly", action: "Nature-Based Solutions Interventions (NBS)" };
+const OFF_SOURCE = {
+  invasives: "Every invasives source", invertebrates: "Riverfly", action: "Nature-Based Solutions Interventions (NBS)",
+  habitatCondition: "Modular River Survey (MoRPh)",
+};
+
+// MoRPh's window, as text: "the 5 years to 31 December 2026".
+const morphYearsText = () => {
+  const { to } = getDateRange();
+  const end = new Date(to ?? Date.now()).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+  return `the ${plural(SCORECARD.habitat.withinYears, "year")} to ${end}`;
+};
+const HABITAT_SHORTFALL = () => `Fewer than ${plural(SCORECARD.habitat.minSubreaches, "subreach", "subreaches")}, and no subreach of ${SCORECARD.habitat.orModulesInOneSubreach} modules (a full MoRPh10) - not enough yet for a rating.`;
+const score = (value) => (value == null ? "-" : value.toFixed(1));
+
+// The Habitat measure's two tables, for the panel and the PDF.
+// parts: what the score is made of, and the pressures shown beside it,
+// as waterbody averages: [{ label, value, kind }].
+export function habitatPartRows(scorecard) {
+  const habitat = scorecard.habitat;
+  if (!habitat?.subreaches.length) return [];
+  return [
+    ...habitat.components.map((part) => ({ label: part.label, value: score(part.value), kind: "In the score (higher is better)" })),
+    ...habitat.pressures.map((part) => ({ label: part.label, value: score(part.value), kind: "Pressure, not in the score (lower is better)" })),
+  ];
+}
+
+// Each subreach used, latest first: [{ name, date, surveyType, modules, score }].
+export function habitatSubreachRows(scorecard) {
+  return (scorecard.habitat?.subreaches ?? []).map((subreach) => ({
+    // Subreach names usually start with the river already.
+    name: subreach.river && !subreach.name.includes(subreach.river) ? `${subreach.name} (${subreach.river})` : subreach.name,
+    date: new Date(subreach.date).toLocaleDateString("en-GB", { month: "short", year: "numeric" }),
+    surveyType: subreach.surveyType,
+    modules: String(subreach.modules),
+    score: score(subreach.score),
+  }));
+}
 
 // A survey-counted measure's breakdown, most common first, with each
 // row's share of the surveys: [{ label, surveys, share }]. Visible
@@ -87,10 +124,12 @@ export function subDetailLines(subKey, scorecard) {
     return lines;
   }
   if (subKey === "invasives") {
-    const found = scorecard.invasiveSpeciesFound;
-    const what = "invasive species";
-    const lines = [found.length ? `${found.length} ${what} spotted: ${found.join(", ")}` : `No ${what} spotted in the current date range`];
-    if (!scorecard.nrsRatingsAvailable) lines.push(NRS_SHORTFALL());
+    const seen = scorecard.invasiveSeenBy;
+    const several = scorecard.invasiveSources.length > 1;
+    const lines = [seen.length
+      ? `${plural(seen.length, "invasive species", "invasive species")} spotted: ${seen.map((s) => (several ? `${s.label} (${s.sources.join(", ")})` : s.label)).join(", ")}`
+      : "No invasive species spotted in the current date range"];
+    if (!scorecard.invasivesRated) lines.push(INVASIVES_SHORTFALL());
     return lines;
   }
   if (subKey === "invertebrates") {
@@ -109,6 +148,20 @@ export function subDetailLines(subKey, scorecard) {
     const signs = scorecard.visiblePollutionSigns;
     lines.push(signs.length ? `Signs seen: ${signs.map((s) => `${s.label} (${count(s.surveys)})`).join(", ")}` : "No visible signs of pollution recorded.");
     if (!scorecard.visiblePollutionRated) lines.push(VISIBLE_SHORTFALL());
+    return lines;
+  }
+  if (subKey === "habitatCondition") {
+    const habitat = scorecard.habitat;
+    if (!habitat) return ["The Modular River Survey couldn't be loaded, so this isn't rated."];
+    if (!habitat.subreaches.length) return [`No MoRPh habitat surveys in ${morphYearsText()}`, HABITAT_SHORTFALL()];
+    const lines = [`Habitat complexity: ${score(habitat.score)} out of 10 (mean of ${plural(habitat.subreaches.length, "subreach", "subreaches")}, from the latest MoRPh surveys in ${morphYearsText()})`];
+    if (habitat.supersededCount) {
+      lines.push(`${plural(habitat.supersededCount, "earlier module")} left out because the same place was surveyed again later.`);
+    }
+    if (habitat.preProjectCount) {
+      lines.push(`${plural(habitat.preProjectCount, "subreach", "subreaches")} only had a pre-project survey, so may be out of date if work has been done since.`);
+    }
+    if (!habitat.rated) lines.push(HABITAT_SHORTFALL());
     return lines;
   }
   if (subKey === "action") {
@@ -144,8 +197,13 @@ export function subSourceLines(subKey, scorecard) {
       `Sites: ${scorecard.wildlifeSiteCount}`, `Surveys: ${scorecard.wildlifeSurveys}`];
   }
   if (subKey === "invasives") {
-    return [`Data source: ${scorecard.observationCount ? "National River Survey" : "none with surveys in this period"}`, nrsRule, "Statistical measure: species presence count",
-      `Sites: ${scorecard.locationCount}`, `Readings: ${plural(scorecard.observationCount, "survey")}`];
+    const used = scorecard.invasiveSources;
+    const sources = used.map((s) => `${s.name} (${plural(s.surveys, s.surveyWord)}, ${plural(s.sites, s.siteWord, s.siteWord === "subreach" ? "subreaches" : undefined)})`).join("; ");
+    return [`${used.length === 1 ? "Data source" : "Data sources"}: ${sources || "none with surveys in this period"}`,
+      ...offLine(subKey, scorecard),
+      `${nrsRule}, counted across all the sources switched on`,
+      "Statistical measure: number of species seen, any sighting at any site",
+      `Sites: ${scorecard.invasiveSiteCount}`, `Surveys: ${scorecard.invasiveSurveyCount}`];
   }
   if (subKey === "invertebrates") {
     return [`Data source: ${scorecard.invertebrateSurveyCount ? "Riverfly" : "none with samples in this period"}`,
@@ -163,6 +221,14 @@ export function subSourceLines(subKey, scorecard) {
       "Statistical measure: share of surveys with any visible sign",
       `Sites: ${scorecard.visiblePollutionSiteCount}`, `Surveys: ${scorecard.visiblePollutionSurveys}`];
   }
+  if (subKey === "habitatCondition") {
+    const habitat = scorecard.habitat;
+    const modules = habitat?.modules.length ?? 0;
+    return [`Data source: ${modules ? `Modular River Survey (MoRPh) (${plural(modules, "module")}, ${plural(habitat.subreaches.length, "subreach", "subreaches")})` : "none with surveys in this period"}`,
+      `Data requirement: Min. ${plural(SCORECARD.habitat.minSubreaches, "subreach", "subreaches")}, or 1 of ${SCORECARD.habitat.orModulesInOneSubreach} modules, surveyed in ${morphYearsText()}`,
+      "Statistical measure: mean of the subreaches' habitat complexity scores",
+      "Not limited to the period: the latest survey at each place counts"];
+  }
   if (subKey === "action") {
     return ["Data source: Nature-Based Solutions Interventions (NBS)", "Data requirement: Status = Delivered, within the waterbody",
       "Statistical measure: count of delivered interventions", `Interventions: ${scorecard.actionDeliveredCount}`];
@@ -178,7 +244,7 @@ export function subSourceLines(subKey, scorecard) {
 // panel are listed last.
 export function dataSourceRows(scorecard) {
   const rows = [];
-  const nrsUsed = scorecard.sourcesOn?.invasives
+  const nrsUsed = (scorecard.invasiveSources ?? []).some((s) => s.name === "National River Survey")
     || (scorecard.wildlifeSources ?? []).some((s) => s.name === "National River Survey")
     || ["phosphate", "nitrate", "nitrite", "ammonia", "turbidity", "conductivity"]
       .some((key) => (scorecard[`${key}Sources`] ?? []).some((s) => s.name === "National River Survey"));
@@ -192,6 +258,15 @@ export function dataSourceRows(scorecard) {
   if (scorecard.sourcesOn?.invertebrates !== false && scorecard.invertebrateSurveyCount) {
     rows.push({ name: "Riverfly", coverage: `${plural(scorecard.invertebrateSiteCount, "site")}, ${plural(scorecard.invertebrateSurveyCount, "sample")}` });
   }
+  const morphParts = [];
+  if (scorecard.habitat?.modules.length) {
+    morphParts.push(`Habitat: ${plural(scorecard.habitat.subreaches.length, "subreach", "subreaches")}, ${plural(scorecard.habitat.modules.length, "module")} (latest surveys in ${morphYearsText()})`);
+  }
+  const morphInvasives = (scorecard.invasiveSources ?? []).find((s) => s.siteWord === "subreach");
+  if (morphInvasives) {
+    morphParts.push(`Invasives: ${plural(morphInvasives.sites, "subreach", "subreaches")}, ${plural(morphInvasives.surveys, "module")} in the period`);
+  }
+  if (morphParts.length) rows.push({ name: "Modular River Survey (MoRPh)", coverage: morphParts.join("; ") });
   if (scorecard.sourcesOn?.action !== false && (scorecard.actionDeliveredCount || !SCORECARD.actionNoneIsNoData)) {
     rows.push({ name: "Nature-Based Solutions Interventions (NBS)", coverage: plural(scorecard.actionDeliveredCount, "delivered intervention") });
   }

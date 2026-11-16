@@ -6,7 +6,7 @@
     "name: the dataset's name, as shown on the scorecard, the map and the PDF.",
     "fields: the field or fields holding the measure, as named in the dataset.",
     "values: absolute, range or mixed. See valueTypes.",
-    "The built-in sources (national_river_survey, riverfly and nbs_interventions) are read by the scorecard's own code, not through data/catalog.json."
+    "The built-in sources (national_river_survey, riverfly, nbs_interventions and morph) are read by the scorecard's own code, not through data/catalog.json."
   ],
   "howRatingsWork": [
     "Every measure is rated High, Good, Moderate, Poor or Bad.",
@@ -26,6 +26,7 @@
     "range": "Every value is a range or a step on a colour chart, such as 2-5. Each counts at the bottom of its range, so 2-5 counts as 2.",
     "mixed": "Mostly exact readings, with some at a limit of detection, such as 0 meaning below 0.04. Below the limit counts as 0; beyond it counts at the limit.",
     "flags": "One Yes/No field per sign or species, recorded as 1 or 0 (or Yes) on every survey. A survey shows it when the field is 1 or Yes. List each field and the name to show for it under signs. answeredFields, if given, are the fields of which at least one is ticked when the question was answered; other surveys are left out.",
+    "extent": "A MoRPh extent code for each species: A absent, T trace (under 5%), P present (5-33%) or E extensive (over 33%) of the area within 10 m of the bank top. A species counts as seen when it's T, P or E. List each field and the species name under signs, spelt as the other sources spell it, so a species seen by both counts once.",
     "keywords": "A free-text answer that can name several things. A survey shows a sign when its answer contains any listed keyword, ignoring capitals, spaces and underscores, so \"Oily sheen\" also finds \"Oily_sheen\". A blank answer isn't counted as a survey."
   },
   "sites": {
@@ -33,7 +34,7 @@
     "groupWithinMetres": 50
   },
   "coverage": {
-    "about": "A waterbody needs at least this much data in the period before its nutrient, wildlife, invasives and visible pollution measures are rated. Nutrients count sites and readings, and wildlife and visible pollution sites and surveys, across all their sources; invasives counts National River Survey sites and surveys.",
+    "about": "A waterbody needs at least this much data in the period before its nutrient, wildlife, invasives and visible pollution measures are rated. Nutrients count sites and readings, and wildlife, invasives and visible pollution sites and surveys, across all their sources. For MoRPh, a site is a subreach and a survey is a module.",
     "minSites": 2,
     "minReadings": 6
   },
@@ -186,6 +187,18 @@
             "invasive_plants_floating_pennywort"
           ],
           "values": "absolute"
+        },
+        {
+          "dataset": "morph",
+          "name": "Modular River Survey (MoRPh)",
+          "fields": ["himalayanBalsam", "japaneseKnotweed", "giantHogweed", "floatingPennywort"],
+          "values": "extent",
+          "signs": {
+            "himalayanBalsam": "Himalayan Balsam",
+            "japaneseKnotweed": "Japanese Knotweed",
+            "giantHogweed": "Giant Hogweed",
+            "floatingPennywort": "Floating Pennywort"
+          }
         }
       ]
     },
@@ -195,6 +208,25 @@
       "rating": {"measure": "confirmed-breach rate", "better": "lower", "high": 0, "good": "1/20", "moderate": "1/5", "poor": "1/3", "minSites": 2, "minSamples": 6, "samplesFrom": "2026-01-01"},
       "sources": [
         {"dataset": "riverfly", "name": "Riverfly", "fields": ["breachType", "site"], "values": "absolute"}
+      ]
+    },
+    "habitatCondition": {
+      "spoke": "Habitat and Naturalness",
+      "label": "Habitat",
+      "rating": {
+        "measure": "habitat complexity score (0-10): the average of channel habitat complexity, riparian habitat complexity and riparian vegetation structure",
+        "better": "higher", "high": 5, "good": 4, "moderate": 3, "poor": 2,
+        "withinYears": 5,
+        "minSubreaches": 2,
+        "orModulesInOneSubreach": 10,
+        "supersededWithinMetres": 25,
+        "leaveOutSurveyTypes": ["training", "scenario"]
+      },
+      "about": "Habitat changes slowly and MoRPh is surveyed project by project, so it isn't limited to the scorecard period: it uses the latest surveys in the withinYears years up to the end of the period. A module is left out when a later survey (more than a week later, of any type) has a module within supersededWithinMetres of it, so a pre-project survey only counts where nothing has been surveyed there since. Thresholds were set from the southern MoRPh data since 2021, whose median subreach scored 3.3.",
+      "score": {"index8": "Channel physical habitat complexity", "index10": "Riparian physical habitat complexity", "index11": "Riparian vegetation structural complexity"},
+      "pressures": {"index7": "Bed siltation", "index12": "Bank-top land cover pressure", "index13": "Channel reinforcement", "index14": "Invasive plant extent"},
+      "sources": [
+        {"dataset": "morph", "name": "Modular River Survey (MoRPh)", "fields": ["index8", "index10", "index11", "index7", "index12", "index13", "index14", "surveyType", "riverName", "reachName", "subreachName"], "values": "absolute"}
       ]
     },
     "action": {

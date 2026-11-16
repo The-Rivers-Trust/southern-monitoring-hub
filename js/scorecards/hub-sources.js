@@ -1,7 +1,7 @@
 // =====================================================================
 // HUB SOURCES
 // data/scorecard.json says which datasets feed each scorecard
-// measure. The built-in ones (NRS, Riverfly, NBS) are read by
+// measure. The built-in ones (NRS, Riverfly, NBS, MoRPh) are read by
 // waterbody-data.js; every other one is a dataset in data/catalog.json,
 // whose readings the hub has already loaded and placed in a waterbody.
 // They're read the same way as everywhere in the hub: converted to the
@@ -12,8 +12,8 @@ import { PLACED_LON_FIELD, readingsFor, WATERBODY_FIELD } from "../data/readings
 import { estimateOf, mappedValue } from "../readings.js";
 import { isWithinDateRange } from "./date-range.js";
 
-export const BUILT_IN = new Set(["national_river_survey", "riverfly", "nbs_interventions"]);
-const VALUE_TYPES = ["absolute", "range", "mixed", "flags", "keywords"];
+export const BUILT_IN = new Set(["national_river_survey", "riverfly", "nbs_interventions", "morph"]);
+const VALUE_TYPES = ["absolute", "range", "mixed", "flags", "keywords", "extent"];
 // Measures counted from survey observations, not a determinand.
 export const SIGN_TYPES = ["flags", "keywords"];
 

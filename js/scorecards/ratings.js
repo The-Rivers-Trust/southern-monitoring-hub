@@ -57,6 +57,13 @@ export function visiblePollutionRank(rate) {
   return i === -1 ? SCORECARD.visiblePollutionRateMax.length : i;
 }
 
+// The MoRPh habitat complexity score, 0-10: higher is better.
+export function habitatRank(score) {
+  if (isMissing(score) || !SCORECARD.habitatScoreMin) return null;
+  const i = SCORECARD.habitatScoreMin.findIndex((min) => score >= min);
+  return i === -1 ? SCORECARD.habitatScoreMin.length : i;
+}
+
 // Zero delivered interventions is Bad, or "no data" when Action's
 // whenNone in data/scorecard.json says so.
 export function actionRank(count) {
@@ -88,6 +95,7 @@ export function catchmentHealthRanks(scorecard) {
     invertebrates: scorecard.invertebrateRank,
     action: scorecard.actionRank,
     visiblePollution: scorecard.visiblePollutionRank,
+    habitatCondition: scorecard.habitatRank,
   } : null;
 }
 

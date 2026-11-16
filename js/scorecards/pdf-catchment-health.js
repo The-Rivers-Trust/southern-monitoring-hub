@@ -16,7 +16,7 @@ import { getMetric } from "./metrics.js";
 import { bandForRank, catchmentHealthRanks, themeRank, catchmentHealthOverallRank } from "./ratings.js";
 import { catchmentHealthWheelImage, WHEEL_IMAGE_ASPECT } from "./charts/wheels.js";
 import { barChartImage } from "./charts/bar-chart.js";
-import { BREAKDOWNS, breakdownRows, dataSourceRows, isSignsLine, subDetailLines } from "./scorecard-text.js";
+import { BREAKDOWNS, breakdownRows, dataSourceRows, habitatPartRows, habitatSubreachRows, isSignsLine, subDetailLines } from "./scorecard-text.js";
 import { rect, text, rgb } from "./pdf-common.js";
 
 const PAGE = { width: 210, height: 297, margin: 18 };
@@ -285,6 +285,50 @@ export function buildCatchmentHealthPdf(JsPDF, { waterbodyName, waterBodyId, sco
     rule(doc, y);
     y += 9;
     spoke.subs.filter((sub) => BREAKDOWNS[sub.key]).forEach((sub) => signsTable(sub.key));
+    if (spoke.subs.some((sub) => sub.key === "habitatCondition")) habitatTables();
+  };
+
+  // A plain table: a title, column headings at the given x offsets, rows
+  // of text (wrapped to their column), and an optional note.
+  const plainTable = (title, columns, rows, note) => {
+    const widths = columns.map((column, i) => (columns[i + 1]?.x ?? CONTENT_W) - column.x - 2);
+    const wrapped = rows.map((row) => row.map((value, i) => wrap(doc, value, widths[i], 8.5)));
+    const heights = wrapped.map((row) => 2.2 + Math.max(...row.map((lines) => lines.length)) * lineH(8.5) * 1.15 + 1.6);
+    ensure(10 + heights[0] + 8);
+    text(doc, title, M, y, { fontSize: 9.5, bold: true, color: COLOR.ink });
+    y += 5;
+    columns.forEach((column) => text(doc, column.label, M + column.x, y, { fontSize: 7.5, bold: true, color: COLOR.muted }));
+    y += 2;
+    wrapped.forEach((row, r) => {
+      ensure(heights[r]);
+      rule(doc, y);
+      const baseline = y + 4.2;
+      row.forEach((lines, i) => text(doc, lines, M + columns[i].x, baseline, { fontSize: 8.5, color: i === 0 ? COLOR.ink : COLOR.body }));
+      y += heights[r];
+    });
+    rule(doc, y);
+    y += 4;
+    if (note) {
+      const lines = wrap(doc, note, CONTENT_W, 7.5, "italic");
+      ensure(lines.length * lineH(7.5) + 4);
+      text(doc, lines, M, y, { fontSize: 7.5, italic: true, color: COLOR.muted });
+      y += lines.length * lineH(7.5);
+    }
+    y += 6;
+  };
+
+  // The Habitat measure: what its score is made of, then each subreach.
+  const habitatTables = () => {
+    const parts = habitatPartRows(scorecard);
+    if (!parts.length) return;
+    plainTable("Habitat: MoRPh indices",
+      [{ label: "Index", x: 0 }, { label: "Average", x: 74 }, { label: "Used as", x: 96 }],
+      parts.map((part) => [part.label, part.value, part.kind]),
+      "Waterbody averages of the subreaches' means. Each index runs from 0 upwards (most to about 10). The pressures are shown for context and don't change the rating.");
+    plainTable("Habitat: subreaches surveyed",
+      [{ label: "Subreach", x: 0 }, { label: "Surveyed", x: 84 }, { label: "Type", x: 106 }, { label: "Modules", x: 138 }, { label: "Score", x: 158 }],
+      habitatSubreachRows(scorecard).map((row) => [row.name, row.date, row.surveyType, row.modules, row.score]),
+      "The latest survey at each place. An earlier module is left out where the same place was surveyed again later.");
   };
 
   // A survey-counted measure's breakdown: label, surveys, share.

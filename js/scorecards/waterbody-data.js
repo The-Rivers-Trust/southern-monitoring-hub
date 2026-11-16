@@ -7,6 +7,7 @@
 //     with NRS for the nutrient measures (hub-sources.js)
 //   - Riverfly: samples inside the waterbody polygon (spatial - no join key)
 //   - Nature-Based Solutions: delivered interventions inside the polygon
+//   - MoRPh: the latest habitat surveys inside the polygon (morph.js)
 // The NRS sites/observations don't depend on the date range, so they're
 // cached per waterbody; Riverfly and NBS are re-queried each time
 // (Riverfly is date-filtered; NBS needs the polygon).
@@ -18,6 +19,7 @@ import { getDateRange, isWithinDateRange } from "./date-range.js";
 import { getLayer, queryAll } from "./nrs-service.js";
 import { escapeSql, sqlTimestamp } from "./format.js";
 import * as ratings from "./ratings.js";
+import { morphFor, morphInvasivesFor } from "./morph.js";
 import { BUILT_IN, allSources, isSourceOn, sourceReadings, sourceSurveys, switchedOffNames, usesSource } from "./hub-sources.js";
 
 const NUTRIENTS = ["phosphate", "nitrate", "nitrite", "ammonia", "turbidity", "conductivity"];
@@ -118,10 +120,14 @@ export async function computeScorecard(waterBodyId, geometry) {
   // data rather than a rating of nothing.
   const riverflyOn = usesSource("invertebrates", "riverfly");
   const nbsOn = usesSource("action", "nbs_interventions");
+  const morphOn = usesSource("habitatCondition", "morph");
   const listed = (key, dataset) => allSources(key).some((source) => source.dataset === dataset);
-  const [riverfly, actionDeliveredCount] = await Promise.all([
+  const morphInvasivesSource = allSources("invasives").find((source) => source.dataset === "morph");
+  const [riverfly, actionDeliveredCount, morph, morphInvasives] = await Promise.all([
     listed("invertebrates", "riverfly") ? queryRiverfly(geometry) : { samples: 0, breaches: 0, sites: 0 },
     listed("action", "nbs_interventions") ? queryNbsCount(geometry) : 0,
+    listed("habitatCondition", "morph") && SCORECARD.habitat ? morphFor(waterBodyId, geometry) : null,
+    morphInvasivesSource ? morphInvasivesFor(waterBodyId, geometry, morphInvasivesSource.signs ?? {}) : null,
   ]);
 
   const obs = data.observations.filter((o) => isWithinDateRange(o.time_of_observation));
@@ -130,7 +136,6 @@ export async function computeScorecard(waterBodyId, geometry) {
   const series = (field) => obs.filter((o) => o.time_of_observation != null && o[field] != null)
     .map((o) => ({ date: o.time_of_observation, value: o[field] }));
   const present = (fields) => fields.filter((f) => obs.some((o) => o[f.observationField] === "Yes")).map((f) => f.label);
-  const gated = (rank) => (nrsRatingsAvailable ? rank : null);
 
   // Each nutrient pools NRS with the hub's listed sources, aggregated per
   // its METRICS `aggregation`, and is rated once it has enough sites and
@@ -245,8 +250,28 @@ export async function computeScorecard(waterBodyId, geometry) {
   const wildlifeScore = wildlifeShare === null ? null : (wildlifeShare * wildlifeEffective) / SCORECARD.wildlifeSpecies.length;
   const wildlifeRated = wildlife.siteCount >= SCORECARD.nrsMinSites && wildlife.surveys >= SCORECARD.nrsMinSurveys;
 
-  const invasivesOn = usesSource("invasives", "national_river_survey");
-  const invasiveSpeciesFound = invasivesOn ? present(INVASIVE_PLANT_FIELDS) : [];
+  // Invasives: NRS and MoRPh pooled. A species counts once if any survey
+  // or module in the period records it, at any site. Rated once there
+  // are enough sites (NRS sites, MoRPh subreaches) and surveys (NRS
+  // surveys, MoRPh modules) across the sources switched on.
+  const invasivesNrsOn = usesSource("invasives", "national_river_survey");
+  const invasivesMorphOn = usesSource("invasives", "morph");
+  const invasivesOn = invasivesNrsOn || invasivesMorphOn;
+  const invasiveSeenBy = new Map(); // species -> source names
+  const seenBy = (label, name) => invasiveSeenBy.set(label, [...(invasiveSeenBy.get(label) ?? []), name]);
+  const invasiveSources = [];
+  if (invasivesNrsOn && obs.length) {
+    present(INVASIVE_PLANT_FIELDS).forEach((label) => seenBy(label, "National River Survey"));
+    invasiveSources.push({ name: "National River Survey", sites: data.locationIDs.length, surveys: obs.length, siteWord: "site", surveyWord: "survey" });
+  }
+  if (invasivesMorphOn && morphInvasives?.modules) {
+    morphInvasives.seen.forEach((_, label) => seenBy(label, morphInvasivesSource.name));
+    invasiveSources.push({ name: morphInvasivesSource.name, sites: morphInvasives.subreaches, surveys: morphInvasives.modules, siteWord: "subreach", surveyWord: "module" });
+  }
+  const invasiveSpeciesFound = [...invasiveSeenBy.keys()];
+  const invasiveSiteCount = invasiveSources.reduce((sum, source) => sum + source.sites, 0);
+  const invasiveSurveyCount = invasiveSources.reduce((sum, source) => sum + source.surveys, 0);
+  const invasivesRated = invasiveSiteCount >= SCORECARD.nrsMinSites && invasiveSurveyCount >= SCORECARD.nrsMinSurveys;
 
   const scorecard = {
     error,
@@ -265,7 +290,14 @@ export async function computeScorecard(waterBodyId, geometry) {
     wildlifeSpeciesSeen: SCORECARD.wildlifeSpecies.map((label) => ({ label, surveys: wildlife.species.get(label) ?? 0 }))
       .sort((a, b) => b.surveys - a.surveys),
     wildlifeSources: wildlife.sources,
-    invasiveRank: invasivesOn ? gated(ratings.invasiveRank(invasiveSpeciesFound.length)) : null,
+    invasiveRank: invasivesOn && invasivesRated ? ratings.invasiveRank(invasiveSpeciesFound.length) : null,
+    invasivesRated,
+    invasiveSources,
+    invasiveSiteCount,
+    invasiveSurveyCount,
+    // Each species seen, with the sources that saw it: [{ label, sources }].
+    invasiveSeenBy: [...invasiveSeenBy].map(([label, sources]) => ({ label, sources })),
+    invasivesNrsOn,
     invertebrateRank: riverflyOn ? ratings.invertebrateRank(riverfly.samples, riverfly.sites, riverfly.breaches) : null,
     actionRank: nbsOn ? ratings.actionRank(actionDeliveredCount) : null,
     visiblePollutionRank: pollutionRated ? ratings.visiblePollutionRank(pollution.withSigns / pollution.surveys) : null,
@@ -276,17 +308,24 @@ export async function computeScorecard(waterBodyId, geometry) {
     // Every sign seen, most common first: [{ label, surveys }].
     visiblePollutionSigns: [...pollution.signs].map(([label, surveys]) => ({ label, surveys })).sort((a, b) => b.surveys - a.surveys),
     visiblePollutionSources: pollution.sources,
+    // MoRPh's current habitat picture (morph.js), while it's switched on.
+    habitat: morphOn ? morph : null,
+    habitatRank: morphOn && morph?.rated ? ratings.habitatRank(morph.score) : null,
     // Which sources feed which measures, after the sources panel.
-    sourcesOn: { invasives: invasivesOn, invertebrates: riverflyOn, action: nbsOn },
+    sourcesOn: { invasives: invasivesOn, invertebrates: riverflyOn, action: nbsOn, habitatCondition: morphOn },
     // measure key -> the datasets with data here in the period, switched
     // on or not: what the sources panel offers.
     available: {
       ...available,
-      invasives: listed("invasives", "national_river_survey") && obs.length ? ["national_river_survey"] : [],
+      invasives: [
+        ...(listed("invasives", "national_river_survey") && obs.length ? ["national_river_survey"] : []),
+        ...(morphInvasives?.modules ? ["morph"] : []),
+      ],
       invertebrates: riverfly.samples ? ["riverfly"] : [],
       action: actionDeliveredCount ? ["nbs_interventions"] : [],
+      habitatCondition: morph?.modules.length ? ["morph"] : [],
     },
-    switchedOff: Object.fromEntries(["phosphate", "nitrate", "nitrite", "ammonia", "turbidity", "conductivity", "wildlife", "invasives", "invertebrates", "action", "visiblePollution"]
+    switchedOff: Object.fromEntries(["phosphate", "nitrate", "nitrite", "ammonia", "turbidity", "conductivity", "wildlife", "invasives", "invertebrates", "action", "visiblePollution", "habitatCondition"]
       .map((key) => [key, switchedOffNames(key)])),
 
     invasiveSpeciesFound,

@@ -112,6 +112,8 @@ export const SCORECARD = {
   actionCountMin: null,
   actionNoneIsNoData: null, // true: no delivered interventions is "no data", not Bad
   visiblePollutionRateMax: null,
+  habitatScoreMin: null,
+  habitat: null, // MoRPh's window, coverage and superseding rules, from data/scorecard.json
 
   // The year the period drop-down offers, whole or by quarter.
   periodYear: 2026,
@@ -127,6 +129,9 @@ export const SCORECARD_SOURCES = {
   // wfdWaterbodyID. Shown on the map for context; not part of the rating.
   pollutionUrl: "https://services3.arcgis.com/Bb8lfThdhugyc4G3/ArcGIS/rest/services/Event_Duration_Monitoring_Storm_Overflows_2025/FeatureServer/0",
   nbsUrl: "https://services3.arcgis.com/Bb8lfThdhugyc4G3/ArcGIS/rest/services/NBS_Interventions_Public_Layer/FeatureServer/0",
+  // Modular River Survey: one point per surveyed module (a 10-50 m
+  // stretch), with its summary indices.
+  morphUrl: "https://services3.arcgis.com/Bb8lfThdhugyc4G3/arcgis/rest/services/MoRPh_Rivers_Citizen_Science/FeatureServer/0",
 };
 
 // Map marker colours - deliberately none of the rating colours, so a
@@ -136,6 +141,7 @@ export const SCORECARD_COLORS = {
   siteMuted: "#8f8d86",
   riverfly: "#2f9e44",
   nbs: "#e64dc4",
+  morph: "#a0682f",
 };
 
 // Map symbols for the hub's own datasets in data/scorecard.json, by
@@ -189,7 +195,7 @@ export const CATCHMENT_HEALTH_SPOKES = [
     ],
   },
   {
-    key: "habitat", label: "Habitat and Naturalness", shortLabel: "HAB", color: { dark: "#3987e5", light: "#2a78d6" },
+    key: "habitat", label: "Habitat and Naturalness", shortLabel: "HAB", color: { dark: "#3987e5", light: "#2a78d6" }, wired: true,
     subs: [
       { key: "habitatCondition", label: "Habitat", shortLabel: "HAB" },
       { key: "barriers", label: "Barriers", shortLabel: "BAR" },

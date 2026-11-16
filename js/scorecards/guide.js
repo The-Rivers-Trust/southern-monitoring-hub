@@ -19,6 +19,7 @@ const VALUE_TYPE_LABELS = {
   mixed: "Exact, with some at a detection limit",
   flags: "Yes/No for each sign",
   keywords: "Free text, searched for keywords",
+  extent: "Extent code (A, T, P or E)",
 };
 
 const BUILT_IN_DETAILS = {
@@ -29,6 +30,11 @@ const BUILT_IN_DETAILS = {
   riverfly: {
     how: "Riverfly samples whose location falls inside the waterbody boundary, in the period. Only samples actually taken and judged against the site's trigger level count: clean (breach = 0) or a confirmed breach (breachType = Confirmed). Left out: samples with no breach result (usually a site with no trigger level set), unconfirmed breaches, and visits where no sample was taken (sampleTaken = 0). The map shows the same samples.",
     equipment: "Riverfly Partnership kick-sample method",
+  },
+  morph: {
+    invasives: "Modular River Survey modules (one point per surveyed 10-50 m stretch) inside the waterbody boundary, surveyed in the period. Unlike Habitat, every module in the period counts, not just the latest at each place. Training and scenario surveys are left out, and modules the service holds twice count once.",
+    how: "Modular River Survey modules (one point per surveyed 10-50 m stretch) inside the waterbody boundary, from the years up to the end of the period. Each module's score is the mean of its channel habitat complexity (index8), riparian habitat complexity (index10) and riparian vegetation structure (index11). Siltation (index7), bank-top land cover pressure (index12), channel reinforcement (index13) and invasive plant extent (index14) are shown beside the score but don't change it.",
+    equipment: "MoRPh field survey from the bank top (modularriversurvey.org)",
   },
   nbs_interventions: {
     how: "Nature-Based Solutions interventions with Status = Delivered whose footprint touches the waterbody boundary. Not limited by the period.",
@@ -41,6 +47,7 @@ const MEASURE_DESCRIPTIONS = {
   invasives: "How many different invasive plant species have been seen at survey sites in the waterbody.",
   invertebrates: "How often Riverfly samples in the waterbody show a confirmed breach of their trigger level - the share of samples, not the number.",
   action: "How many Nature-Based Solutions interventions have been delivered in the waterbody.",
+  habitatCondition: "How varied and natural the river's physical habitat is, from Modular River Survey (MoRPh) surveys: the variety of flow types, bed materials and bed features in the channel, the physical features of the banks, and the structure of the bank vegetation. Scored 0 to 10, higher is better.",
   visiblePollution: "How often surveys in the waterbody record a visible sign of pollution - the share of surveys showing at least one sign, not the number of signs.",
 };
 
@@ -170,6 +177,14 @@ function thresholdTable(key, catalog) {
   if (key === "invasives") return table(["Rating", "Invasive species seen"], lowerCountRows(SCORECARD.invasiveRichnessMax, "species", "species"));
   if (key === "invertebrates") return table(["Rating", "Samples with a confirmed breach"], lowerRows(SCORECARD.invertebrateBreachRateMax, rateText));
   if (key === "visiblePollution") return table(["Rating", "Surveys with any visible sign of pollution"], lowerRows(SCORECARD.visiblePollutionRateMax, rateText));
+  if (key === "habitatCondition") {
+    const steps = SCORECARD.habitatScoreMin;
+    return table(["Rating", "Habitat complexity score (0-10)"], RATING_BANDS.map((_, rank) => {
+      if (rank === 0) return [bandCell(rank), `${steps[0]} or more`];
+      if (rank < steps.length) return [bandCell(rank), `${steps[rank]} to under ${steps[rank - 1]}`];
+      return [bandCell(rank), `Under ${steps.at(-1)}`];
+    }));
+  }
   if (key === "action") return table(["Rating", "Delivered interventions"], higherRows(SCORECARD.actionCountMin, "intervention", "interventions", SCORECARD.actionNoneIsNoData));
   return el("p", "note", "No thresholds set.");
 }
@@ -179,6 +194,9 @@ function thresholdTable(key, catalog) {
 // How a survey-counted source's fields are read.
 function signText(key, source) {
   const signs = Object.entries(source.signs);
+  if (source.values === "extent") {
+    return `A species counts as seen when its extent within 10 m of the bank top is T (trace, under 5%), P (present, 5-33%) or E (extensive, over 33%); A (absent) doesn't count. Species: ${signs.map(([field, label]) => `${label} (${field})`).join(", ")}.`;
+  }
   if (source.values === "keywords") {
     return `A survey shows a sign when its answer contains any of: ${signs.map(([keyword]) => `"${keyword}"`).join(", ")} (ignoring capitals, spaces and underscores, so "Oily sheen" also finds "Oily_sheen"). A blank answer isn't counted as a survey.`;
   }
@@ -196,7 +214,7 @@ function sourceRows(key, measure, catalog) {
     if (BUILT_IN.has(source.dataset)) {
       const details = BUILT_IN_DETAILS[source.dataset];
       return [source.name, source.fields.join(", "), VALUE_TYPE_LABELS[source.values] ?? source.values, details?.equipment ?? "",
-        [details?.how, signsText].filter(Boolean).join(" ")];
+        [details?.[key] ?? details?.how, signsText].filter(Boolean).join(" ")];
     }
     if (source.signs) {
       return [source.name, source.fields.join(", "), VALUE_TYPE_LABELS[source.values] ?? source.values, "Visual survey",
@@ -246,8 +264,10 @@ function requirementLines(key) {
   if (key === "invasives") {
     const fields = INVASIVE_PLANT_FIELDS;
     return [
-      `At least ${plural(SCORECARD.nrsMinSites, "National River Survey site")} and ${plural(SCORECARD.nrsMinSurveys, "survey")} in the period.`,
-      `A species counts once if any survey in the period records it as seen ("Yes"). Species looked for: ${fields.map((f) => f.label).join(", ")}.`,
+      `At least ${plural(SCORECARD.nrsMinSites, "site")} and ${plural(SCORECARD.nrsMinSurveys, "survey")} in the period, counted across all the sources switched on. For MoRPh, a subreach counts as a site and a module as a survey.`,
+      "Any sighting at any site counts: a species counts once if any National River Survey survey records it as seen (\"Yes\") or any MoRPh module records it as T, P or E. A species seen by both sources still counts once.",
+      `Species looked for: ${fields.map((f) => f.label).join(", ")} on the National River Survey. MoRPh records Himalayan Balsam, Japanese Knotweed, Giant Hogweed and Floating Pennywort.`,
+      "The scorecard says which source saw each species.",
     ];
   }
   if (key === "invertebrates") {
@@ -263,6 +283,19 @@ function requirementLines(key) {
       `At least ${plural(SCORECARD.nrsMinSites, "site")} and ${plural(SCORECARD.nrsMinSurveys, "survey")} in the period, counted across all the sources switched on.`,
       "Statistic: surveys showing at least one sign, divided by all surveys. A survey with several signs counts once.",
       "The scorecard lists every sign seen, with how many surveys showed it.",
+    ];
+  }
+  if (key === "habitatCondition") {
+    const h = SCORECARD.habitat;
+    return [
+      `Not limited to the period: habitat changes slowly and is surveyed project by project, so the latest MoRPh surveys from the ${plural(h.withinYears, "year")} up to the end of the period count.`,
+      `At least ${plural(h.minSubreaches, "subreach", "subreaches")}, or one subreach of ${h.orModulesInOneSubreach} modules (a full MoRPh10). A subreach is the modules with the same river, reach and subreach names surveyed within a week.`,
+      `The latest survey at each place counts. A module is left out when a later survey (more than a week later, of any type) has a module within ${h.supersededWithinMetres} m of it, matched on position since projects often rename a stretch between surveys. So a pre-project survey only counts where nothing has been surveyed there since.`,
+      `Left out: ${h.leaveOutSurveyTypes.join(" and ")} surveys.`,
+      "Score: each module's mean of the three indices, averaged per subreach, then the mean of the subreaches.",
+      "Where a place only has a pre-project survey it still counts, but the scorecard says so: those stretches were surveyed because work was planned, and some may have had the work since.",
+      "A survey straight after restoration work can score lower than before, because banks are often bare until vegetation returns. That is the current state, so it isn't corrected for.",
+      "MoRPh's indices describe complexity, not a standard: there's no official good or poor value for a module. These thresholds were set from the southern MoRPh data since 2021, where the median subreach scored 3.3.",
     ];
   }
   if (key === "action") {
@@ -328,7 +361,7 @@ function generalSections(file) {
     "A theme's rating is the average of its rated measures: each rating is scored 1 (High) to 5 (Bad), averaged, then rounded.",
     "The overall rating, in the centre of the wheel, is the average of the rated themes in the same way.",
     "Themes not yet assessed are drawn grey and don't count towards the overall rating.",
-    `Every count uses the period chosen in the scorecard panel, currently ${dateRangeDescription()}: the year, or one of its quarters.`,
+    `Every count uses the period chosen in the scorecard panel, currently ${dateRangeDescription()}: the year, or one of its quarters. The exception is Habitat, which uses the latest MoRPh surveys from the years up to the end of the period.`,
     "The Data sources panel can switch a dataset off for one measure. It's then left out of that measure's rating, chart and map marks, and the PDF lists it as switched off.",
   ].forEach((line) => how.append(el("li", null, line)));
   parts.push(how);

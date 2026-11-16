@@ -6,8 +6,8 @@
 // PDF download): the 8-theme wheel; click a theme's inner wedge for
 // what's behind its score. While a waterbody is selected it's filled with
 // its overall rating, sites outside it are greyed, and its Riverfly
-// samples, storm overflow outfalls, delivered NBS interventions and river
-// network (clipped to the boundary) are drawn. The scorecard follows the
+// samples, MoRPh modules, storm overflow outfalls, delivered NBS
+// interventions and river network (clipped to the boundary) are drawn. The scorecard follows the
 // date range in its panel; the header's partnership only affects which
 // waterbodies and sites are shown.
 //
@@ -24,7 +24,8 @@ import { dateRangeDescription, initDateRange, onDateRangeChange } from "./date-r
 import { fetchEquipment, getLayer } from "./nrs-service.js";
 import { computeScorecard, RIVERFLY_ASSESSED, riverflyWhere } from "./waterbody-data.js";
 import { bandForRank, catchmentHealthRanks, catchmentHealthOverallRank } from "./ratings.js";
-import { BREAKDOWNS, breakdownRows, isSignsLine, subDetailLines, subSourceLines } from "./scorecard-text.js";
+import { BREAKDOWNS, breakdownRows, habitatPartRows, habitatSubreachRows, isSignsLine, subDetailLines, subSourceLines } from "./scorecard-text.js";
+import { morphFor } from "./morph.js";
 import { renderCatchmentHealthWheel, renderRatingLegend } from "./charts/wheels.js";
 import { renderBarChart, bucketGranularity } from "./charts/bar-chart.js";
 import { loadJsPdf, safeFileName } from "./pdf-common.js";
@@ -37,7 +38,7 @@ import { renderSourcesPanel } from "./sources-panel.js";
 import { renderGuide } from "./guide.js";
 import { hubCatalog, scorecardFile } from "./hub-sources.js";
 import { useRules } from "./rules.js";
-import { METRICS } from "./config.js";
+import { METRICS, SCORECARD } from "./config.js";
 
 const WATERBODY_OUTLINE = { dark: [230, 229, 220, 0.75], light: [35, 33, 28, 0.7] };
 
@@ -51,10 +52,10 @@ const state = {
   equipmentRanges: {},
   selected: null, // { attrs, geometry } of the selected waterbody
   scorecard: null,
-  requests: { scorecard: 0, riverfly: 0, rivers: 0, nbs: 0, hubSites: 0 },
+  requests: { scorecard: 0, riverfly: 0, rivers: 0, nbs: 0, hubSites: 0, morph: 0 },
   healthSelectedPath: null,
   // What's drawn for the selected waterbody, for the map key.
-  shown: { sites: 0, riverfly: 0, outfalls: 0, nbs: 0, hub: [] },
+  shown: { sites: 0, riverfly: 0, outfalls: 0, nbs: 0, morph: 0, hub: [] },
 };
 
 const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -152,6 +153,7 @@ export async function initScorecardsTab(els, { catalog, area, waterbodies, partn
     title: "Riverfly monitoring (2026)",
   });
   L.nbs = new GraphicsLayer({ title: "Nature-Based Solutions (delivered)" });
+  L.morph = new GraphicsLayer({ title: "MoRPh habitat surveys" });
   L.hubSites = new GraphicsLayer({ title: "Monitoring sites (data/scorecard.json)" });
   L.sites = new FeatureLayer({
     url: NRS.locationsUrl,
@@ -162,7 +164,7 @@ export async function initScorecardsTab(els, { catalog, area, waterbodies, partn
     title: "Survey sites",
   });
   // Sites always on top - they're the point of the map.
-  mapEl.map.addMany([L.waterbodies, L.highlight, L.rivers, L.pollution, L.riverfly, L.nbs, L.hubSites, L.sites]);
+  mapEl.map.addMany([L.waterbodies, L.highlight, L.rivers, L.pollution, L.morph, L.riverfly, L.nbs, L.hubSites, L.sites]);
 
   mapEl.addEventListener("arcgisViewClick", (event) => handleMapClick(event.detail));
   els.deselectEl.addEventListener("click", deselect);
@@ -173,6 +175,7 @@ export async function initScorecardsTab(els, { catalog, area, waterbodies, partn
     if (!state.selected) return;
     applyRiverflyFilter();
     applyHubSites();
+    applyMorphPoints();
     refreshScorecard();
   });
   onThemeChange(handleThemeChange);
@@ -220,6 +223,7 @@ function handleSourcesChange() {
   applyRiverflyFilter();
   applyHubSites();
   applyNbsPoints();
+  applyMorphPoints();
   refreshScorecard();
 }
 
@@ -296,7 +300,7 @@ function selectWaterbody(attrs) {
   const waterbody = state.waterbodies.get(attrs.water_body_id);
   state.selected = { attrs, geometry: waterbody.geometry };
   state.scorecard = null;
-  state.shown = { sites: 0, riverfly: 0, outfalls: 0, nbs: 0, hub: [] };
+  state.shown = { sites: 0, riverfly: 0, outfalls: 0, nbs: 0, morph: 0, hub: [] };
   els.health.panelEl.hidden = false;
   els.health.panelEl.closed = false;
   els.sourcesEl.hidden = false;
@@ -318,7 +322,7 @@ function deselect() {
   const { els, layers } = state;
   state.selected = null;
   state.scorecard = null;
-  state.shown = { sites: 0, riverfly: 0, outfalls: 0, nbs: 0, hub: [] };
+  state.shown = { sites: 0, riverfly: 0, outfalls: 0, nbs: 0, morph: 0, hub: [] };
   renderKey();
   Object.keys(state.requests).forEach((k) => { state.requests[k]++; });
   els.health.panelEl.hidden = true;
@@ -394,6 +398,7 @@ function renderKey() {
   if (shown.sites) row(markerSvg({ style: "circle", color: SCORECARD_COLORS.site, outline: "#ffffff", size: 10 }), "National River Survey sites");
   for (const source of shown.hub) row(markerSvg(HUB_SOURCE_SYMBOLS[source.dataset] ?? HUB_SOURCE_SYMBOLS.fallback), `${source.name} sites`);
   if (shown.riverfly) row(markerSvg({ style: "circle", color: SCORECARD_COLORS.riverfly, outline: "#ffffff", size: 7 }), "Riverfly samples");
+  if (shown.morph) row(markerSvg({ style: "circle", color: SCORECARD_COLORS.morph, outline: "#ffffff", size: 7 }), "MoRPh habitat survey modules");
   if (shown.nbs) row(markerSvg({ style: "circle", color: SCORECARD_COLORS.nbs, outline: "#ffffff", size: 8 }), "Delivered NBS interventions");
   if (shown.outfalls) row(`<span class="mapKeyGlyph" aria-hidden="true">${STORM_OVERFLOW_GLYPH}</span>`, "Storm overflow outfalls (2025)");
   keyEl.innerHTML = rows.length ? `<ul>${rows.join("")}</ul>` : "";
@@ -405,6 +410,7 @@ function applyGeometryLayers() {
   applyHubSites();
   applyClippedRivers();
   applyNbsPoints();
+  applyMorphPoints();
 }
 
 // Confirmed breaches and clean samples inside the polygon, in range. No
@@ -510,6 +516,36 @@ async function applyHubSites() {
       title: `${site.name}: ${site.site}`,
       content: `${site.samples} sample${site.samples === 1 ? "" : "s"} in ${escapeHtml(dateRangeDescription())}<br>Measures: ${escapeHtml(site.measures.join(", "))}`
         + `<br><small>Samples within ${siteGroupDistance()} m of each other count as one site.</small>`,
+    },
+  })));
+}
+
+// The MoRPh modules the Habitat measure uses (the latest at each place),
+// as brown points.
+async function applyMorphPoints() {
+  const layer = state.layers.morph;
+  const request = ++state.requests.morph;
+  layer.removeAll();
+  if (!state.selected) return;
+  await state.hubData; // the window and rules are in data/scorecard.json
+  if (request !== state.requests.morph || !state.selected) return;
+  if (!SCORECARD.habitat || !usesSource("habitatCondition", "morph")) {
+    countForKey("morph", 0);
+    return;
+  }
+  const morph = await morphFor(state.selected.attrs.water_body_id, state.selected.geometry);
+  if (request !== state.requests.morph || !morph) return;
+  countForKey("morph", morph.modules.length);
+  const { Graphic } = state.modules;
+  const fields = { ...SCORECARD.habitat.score, ...SCORECARD.habitat.pressures };
+  layer.addMany(morph.modules.map((module) => new Graphic({
+    geometry: { type: "point", x: module.lon, y: module.lat, spatialReference: { wkid: 4326 } },
+    symbol: { type: "simple-marker", style: "circle", color: SCORECARD_COLORS.morph, size: 7, outline: { color: "#ffffff", width: 1 } },
+    popupTemplate: {
+      title: `MoRPh: ${escapeHtml(module.subreachName || module.reachName || module.riverName || "Unnamed subreach")}`,
+      content: `${escapeHtml(module.riverName || "")}${module.moduleNumber ? `, module ${module.moduleNumber}` : ""}`
+        + `<br>Surveyed ${new Date(module.timestamp).toLocaleDateString("en-GB")} (${escapeHtml(module.surveyType || "survey type not recorded")})`
+        + `<br>${Object.entries(fields).map(([field, label]) => `${escapeHtml(label)}: ${module[field] == null ? "-" : Number(module[field]).toFixed(1)}`).join("<br>")}`,
     },
   })));
 }
@@ -633,6 +669,7 @@ function showThemeDetail(spoke, band, path) {
       <div class="healthSectionHeader"><span>${escapeHtml(sub.label)}</span>${badge(bandForRank(ranks[sub.key]))}</div>
       ${subDetailLines(sub.key, state.scorecard).filter((line) => !isSignsLine(line)).map((line) => `<p class="healthLine">${escapeHtml(line)}</p>`).join("")}`;
     if (BREAKDOWNS[sub.key]) section.insertAdjacentHTML("beforeend", signsTable(breakdownRows(state.scorecard, sub.key), BREAKDOWNS[sub.key]));
+    if (sub.key === "habitatCondition") section.insertAdjacentHTML("beforeend", habitatTables(state.scorecard));
     const metric = getMetric(sub.key);
     if (metric) {
       width = renderBarChart(section, {
@@ -654,6 +691,24 @@ function signsTable(rows, { column, note }) {
     <tbody>${rows.map((r) => `<tr${r.surveys ? "" : ' class="isNone"'}><th scope="row">${escapeHtml(r.label)}</th><td>${r.surveys.toLocaleString("en-GB")}</td><td>${r.share}</td></tr>`).join("")}</tbody>
   </table>
   <p class="healthLine signsNote">${escapeHtml(note)}</p>`;
+}
+
+// The Habitat measure: what its score is made of (with the pressures
+// beside it), then each subreach used.
+function habitatTables(scorecard) {
+  const parts = habitatPartRows(scorecard);
+  if (!parts.length) return "";
+  const subreaches = habitatSubreachRows(scorecard);
+  const cells = (row) => row.map((value, i) => (i === 0 ? `<th scope="row">${escapeHtml(value)}</th>` : `<td>${escapeHtml(value)}</td>`)).join("");
+  return `<table class="signsTable">
+    <thead><tr><th scope="col">MoRPh index</th><th scope="col">Average</th><th scope="col">Used as</th></tr></thead>
+    <tbody>${parts.map((r) => `<tr>${cells([r.label, r.value, r.kind])}</tr>`).join("")}</tbody>
+  </table>
+  <p class="healthLine signsNote">Each index runs from 0 upwards (most to about 10). The waterbody average is the mean of its subreaches.</p>
+  <table class="signsTable">
+    <thead><tr><th scope="col">Subreach</th><th scope="col">Surveyed</th><th scope="col">Type</th><th scope="col">Modules</th><th scope="col">Score</th></tr></thead>
+    <tbody>${subreaches.map((r) => `<tr>${cells([r.name, r.date, r.surveyType, r.modules, r.score])}</tr>`).join("")}</tbody>
+  </table>`;
 }
 
 function handleThemeChange(theme) {

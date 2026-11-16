@@ -10,7 +10,7 @@ import { METRICS, SCORECARD } from "./config.js";
 const STEPS = ["high", "good", "moderate", "poor"];
 
 // The direction each rule is written for in ratings.js.
-const DIRECTIONS = { wildlife: "higher", invasives: "lower", invertebrates: "lower", action: "higher", visiblePollution: "lower" };
+const DIRECTIONS = { wildlife: "higher", invasives: "lower", invertebrates: "lower", action: "higher", visiblePollution: "lower", habitatCondition: "higher" };
 
 // A number, or a fraction written as "1/20".
 function figure(value) {
@@ -53,6 +53,20 @@ export function useRules(scorecard) {
   SCORECARD.invasiveRichnessMax = steps("invasives", measures.invasives.rating, problems);
   SCORECARD.actionCountMin = steps("action", measures.action.rating, problems);
   if (measures.visiblePollution) SCORECARD.visiblePollutionRateMax = steps("visiblePollution", measures.visiblePollution.rating, problems);
+  const habitat = measures.habitatCondition?.rating;
+  if (habitat) {
+    SCORECARD.habitatScoreMin = steps("habitatCondition", habitat, problems);
+    SCORECARD.habitat = {
+      withinYears: habitat.withinYears ?? 5,
+      minSubreaches: habitat.minSubreaches ?? 2,
+      orModulesInOneSubreach: habitat.orModulesInOneSubreach ?? 10,
+      supersededWithinMetres: habitat.supersededWithinMetres ?? 25,
+      leaveOutSurveyTypes: habitat.leaveOutSurveyTypes ?? [],
+      score: measures.habitatCondition.score ?? {},
+      pressures: measures.habitatCondition.pressures ?? {},
+    };
+    if (!Object.keys(SCORECARD.habitat.score).length) problems.push("habitatCondition: list the score's indices");
+  }
   const whenNone = measures.action.rating.whenNone ?? "bad";
   if (!["no data", "bad"].includes(whenNone)) problems.push('action: whenNone should be "no data" or "bad"');
   SCORECARD.actionNoneIsNoData = whenNone === "no data";

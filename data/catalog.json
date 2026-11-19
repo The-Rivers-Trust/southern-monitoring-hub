@@ -1,5 +1,6 @@
 {
   "schemaVersion": "0.1.0",
+  "firstYear": 2016,
   "clipArea": {
     "description": "Only readings inside these CaBA partnerships are loaded. After changing this list, run npm run build:clip.",
     "file": "data/clip-area.json",
@@ -364,8 +365,8 @@
         "river": "river"
       },
       "filters": {
-        "defaultWhere": "timestamp >= TIMESTAMP '2000-01-01 00:00:00' AND (sampleTaken IS NULL OR sampleTaken <> 0)",
-        "defaultWhereNote": "Leaves out one record dated the year 26, and surveys where no water sample was taken.",
+        "defaultWhere": "sampleTaken IS NULL OR sampleTaken <> 0",
+        "defaultWhereNote": "Leaves out surveys where no water sample was taken.",
         "excludeFutureDates": true
       },
       "profile": {
@@ -512,7 +513,6 @@
         "folder": "data/ea",
         "description": "Prebuilt from the EA Water Quality API by scripts/build-ea-data.mjs and refreshed weekly by a GitHub Action.",
         "apiUrl": "https://environment.data.gov.uk/water-quality",
-        "firstYear": 2000,
         "samplingPointTypes": ["F6", "FZ", "FA", "CE", "FB", "FC"],
         "excludePurposes": ["COMPLIANCE AUDIT", "OPERATOR DATA", "STATUTORY FAILURES"]
       },

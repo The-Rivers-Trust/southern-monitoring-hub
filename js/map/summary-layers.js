@@ -1,6 +1,6 @@
 // =====================================================================
 // SUMMARY LAYERS
-// Zoomed out, each waterbody is shaded by its median. Zoomed in, each
+// Zoomed out, each waterbody is shaded by its mean. Zoomed in, each
 // waterbody splits into hexagons cut to its boundary, getting smaller
 // with each zoom step. Each layer has its own scale range, so the map
 // swaps them as you zoom. A hexagon level is only prepared once it's
@@ -20,9 +20,9 @@ import {
 import { PLACED_LAT_FIELD, PLACED_LON_FIELD, readingsFor, WATERBODY_FIELD, YEAR_FIELD } from "../data/readings-store.js";
 import { estimateOf, isOnScale, mappedValue, stepIndex } from "../readings.js";
 import { BAND_COLOURS, NEUTRAL, markerRing } from "../palette.js";
-import { reportTitle, summaryPopupContent } from "./popup.js";
+import { summarySourcesContent, summaryYearContent } from "./popup.js";
 import { appendHistory } from "./history.js";
-import { detailTabs } from "../ui/detail-tabs.js";
+import { detailSections } from "../ui/detail-sections.js";
 
 const MERCATOR = { wkid: 3857 };
 const FILL_OPACITY = 0.85;
@@ -83,6 +83,9 @@ function summaryRows(loaded, sources, conventions, filters) {
         isEstimate: estimate !== null,
         estimate,
         isBeside: placedLon !== null,
+        // Only the Environment Agency's sites are named in the summaries.
+        siteName: graphic.attributes[source.dataset.fields.site] || null,
+        eaSiteName: source.dataset.id === "environment_agency" ? graphic.attributes[source.dataset.fields.site] || null : null,
         waterbodyId: graphic.attributes[WATERBODY_FIELD],
         record: graphic,
         source,
@@ -120,6 +123,18 @@ function fillHexagonLevel(index) {
     drawn.graphicFor(summary, hexagonShape(summary), place, widthMetres)));
 }
 
+// The summary graphic for a place clicked earlier, in what is drawn now:
+// { waterbodyId, cellKey, widthMetres }, with the last two empty for a
+// whole waterbody. Null if that place has no readings in this view.
+export function findSummaryGraphic({ waterbodyId, cellKey, widthMetres }) {
+  if (!drawn) return null;
+  if (!widthMetres) return fillLayer.graphics.find((graphic) => graphic.attributes.waterbodyId === waterbodyId) ?? null;
+  const index = HEXAGON_LEVELS.findIndex((level) => level.widthMetres === widthMetres);
+  if (index === -1) return null;
+  fillHexagonLevel(index);
+  return hexagonLayers[index].graphics.find((graphic) => graphic.attributes.cellKey === cellKey) ?? null;
+}
+
 // Prepares the hexagon level for a map scale, if there is one.
 export function fillVisibleHexagons(scale) {
   const index = HEXAGON_LEVELS.findIndex((level) => scale <= level.minScale && scale > level.maxScale);
@@ -152,20 +167,22 @@ export async function showSummaries(mapEl, { catalog, loaded, metric, sources, t
       attributes: { ...attributes, place, waterbodyName: waterbody.name, widthMetres, reportedYear: year },
       symbol: {
         type: "simple-fill",
-        color: colourWithAlpha(BAND_COLOURS[stepIndex(summary.median, metric.scale.breaks)], FILL_OPACITY),
+        color: colourWithAlpha(BAND_COLOURS[stepIndex(summary.mean, metric.scale.breaks)], FILL_OPACITY),
         outline: { color: markerRing(theme), width: 0.5 },
       },
       popupTemplate: {
-        title: reportTitle(metric, year),
-        content: ({ graphic }) => detailTabs(
-          summaryPopupContent(graphic.attributes, metric),
-          `${year === null ? "All years" : year} summary`,
+        title: "", // the panel shows its sections without a title
+        content: ({ graphic }) => detailSections(
+          [
+            { title: "Data sources", content: summarySourcesContent(graphic.attributes) },
+            { title: year === null ? "All years" : `${year}`, content: summaryYearContent(graphic.attributes, metric) },
+          ],
           (container) => appendHistory(container, {
             catalog,
             loaded,
             metric,
             placeName: graphic.attributes.widthMetres ? "this hexagon" : "this waterbody",
-            startYear: graphic.attributes.reportedYear,
+            startYear: null, // the whole record, whatever year is picked
             getRows: () => placeHistory(graphic.attributes),
           }),
         ),

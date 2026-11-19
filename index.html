@@ -51,25 +51,40 @@
       </calcite-tab-nav>
 
       <div class="views">
-    <!-- The Southern Data Hub web map, set up in ArcGIS Online. -->
-    <section class="view appBody" data-view="map">
-      <aside class="sidePanel pickerPanel" aria-label="Map layers">
-        <div class="pickerScroll">
-          <arcgis-layer-list id="webLayerList" reference-element="#webMap" show-heading heading-level="2" label="Map layers" visibility-appearance="checkbox"></arcgis-layer-list>
-        </div>
-      </aside>
+    <!-- The Southern Data Hub web map, set up in ArcGIS Online. Layer list,
+         basemap and legend sit behind buttons on the map, as on the AQuA
+         dashboard (js/map/tool-panels.js). -->
+    <section class="view appBody appBody--single" data-view="map">
       <main class="mapArea">
         <div class="mapColumn">
-          <arcgis-map id="webMap">
-            <arcgis-zoom slot="top-left"></arcgis-zoom>
-            <arcgis-scale-bar slot="bottom-left" unit="metric"></arcgis-scale-bar>
-          </arcgis-map>
+          <div class="mapStage">
+            <arcgis-map id="webMap">
+              <arcgis-zoom slot="top-left"></arcgis-zoom>
+              <calcite-action class="mapAction basemapAction" slot="top-right" icon="basemap" text="Basemap" title="Basemap"></calcite-action>
+              <calcite-action class="mapAction layersAction" slot="top-right" icon="layers" text="Map layers" title="Map layers"></calcite-action>
+              <calcite-action class="mapAction legendAction" slot="top-right" icon="legend" text="Legend" title="Legend"></calcite-action>
+              <arcgis-scale-bar slot="bottom-left" unit="metric"></arcgis-scale-bar>
+            </arcgis-map>
+            <!-- Closed until their button on the map is pressed; one open at a time. -->
+            <calcite-panel class="toolPanel floatPanel layersPanel" heading="Map layers" closable closed>
+              <div class="sidePanelBody">
+                <p class="summary" id="webMapNote">Data from the Southern Data Hub map, shown for the 11 CaBA partnerships only. Layers with nothing in the selected area are left out.</p>
+                <arcgis-layer-list id="webLayerList" reference-element="#webMap" label="Map layers" visibility-appearance="checkbox"></arcgis-layer-list>
+              </div>
+            </calcite-panel>
+            <calcite-panel class="toolPanel floatPanel basemapPanel" heading="Basemap" closable closed>
+              <div class="sidePanelBody">
+                <arcgis-basemap-gallery reference-element="#webMap"></arcgis-basemap-gallery>
+              </div>
+            </calcite-panel>
+            <calcite-panel class="toolPanel floatPanel legendPanel" heading="Legend" closable closed>
+              <div class="sidePanelBody">
+                <arcgis-legend reference-element="#webMap"></arcgis-legend>
+              </div>
+            </calcite-panel>
+          </div>
         </div>
       </main>
-      <aside class="sidePanel detailsPanel" aria-label="Legend">
-        <p class="summary" id="webMapNote">Data from the Southern Data Hub map, shown for the 11 CaBA partnerships only. Switch layers on in the list. Layers with nothing in the selected area are left out.</p>
-        <arcgis-legend reference-element="#webMap"></arcgis-legend>
-      </aside>
     </section>
 
     <section class="view appBody" data-view="monitoring" hidden>

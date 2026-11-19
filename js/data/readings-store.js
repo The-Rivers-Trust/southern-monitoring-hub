@@ -77,11 +77,11 @@ async function fetchPartnership(url, partnership, { where, outFields, objectIdFi
   }
 }
 
-async function loadServiceDataset(dataset, area, Field) {
+async function loadServiceDataset(dataset, area, Field, firstYear) {
   const active = Object.values(dataset.metrics).filter((mapping) => mapping.active);
   // observationFields: loaded for other uses, such as the scorecard.
   const outFields = [...new Set([...Object.values(dataset.fields), ...active.map((mapping) => mapping.field), ...(dataset.observationFields ?? [])])];
-  const options = { where: baseWhere(dataset), outFields, objectIdField: dataset.fields.objectId };
+  const options = { where: baseWhere(dataset, new Date(), firstYear), outFields, objectIdField: dataset.fields.objectId };
 
   // All or nothing: a partly loaded map would look complete but not be.
   const perPartnership = await Promise.all(area.partnerships.map((partnership) => fetchPartnership(dataset.url, partnership, options)));
@@ -205,7 +205,7 @@ async function loadAll(catalog, area, waterbodies) {
   findWaterbody = waterbodyFinder(waterbodies);
   const entries = await Promise.all(catalog.datasets.map(async (dataset) => [
     dataset.id,
-    dataset.source ? await openFileDataset(dataset, Field) : await loadServiceDataset(dataset, area, Field),
+    dataset.source ? await openFileDataset(dataset, Field) : await loadServiceDataset(dataset, area, Field, catalog.firstYear),
   ]));
   return new Map(entries);
 }

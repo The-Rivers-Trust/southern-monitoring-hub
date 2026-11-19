@@ -5,6 +5,7 @@
 // the popupTemplate each layer or graphic already carries.
 // =====================================================================
 
+import { el } from "../dom.js";
 import { getTheme } from "../theme.js";
 
 let map = null;
@@ -15,6 +16,7 @@ let next = null;
 let selectionLayer = null;
 let Graphic = null;
 let items = [];
+let selection = null; // the summary clicked, to find again after a redraw
 let position = 0;
 let latestClick = 0;
 
@@ -34,38 +36,29 @@ function showSelection(graphic) {
   map.map.layers.reorder(selectionLayer, map.map.layers.length - 1);
 }
 
-function closeAction() {
-  const action = document.createElement("calcite-action");
-  action.icon = "x";
-  action.text = "Close";
-  action.title = "Close";
-  action.scale = "s";
-  action.addEventListener("click", closeInfoPanel);
-  return action;
-}
-
 function showCurrent() {
   const graphic = items[position];
   const template = templateOf(graphic);
   const content = template.content({ graphic });
-  const tabsActions = content.querySelector?.(".detailTabsActions");
-  // Summaries carry their own tab bar, so the panel header isn't needed.
-  const headerless = Boolean(tabsActions);
-  panel.heading = headerless ? "" : template.title;
+  panel.heading = template.title ?? "";
   panel.description = items.length > 1 ? `Reading ${position + 1} of ${items.length} here` : "";
-  panel.closable = !headerless;
-  panel.classList.toggle("isHeaderless", headerless);
   previous.hidden = items.length < 2;
   next.hidden = items.length < 2;
   previous.disabled = position === 0;
   next.disabled = position === items.length - 1;
-  tabsActions?.append(closeAction());
   body.replaceChildren(content);
   showSelection(graphic);
 }
 
+// A summary can be found again when the map is redrawn; a reading can't.
+function summarySelection(graphic) {
+  const { waterbodyId, cellKey, widthMetres } = graphic.attributes ?? {};
+  return graphic.popupTemplate && waterbodyId ? { waterbodyId, cellKey, widthMetres } : null;
+}
+
 function open(hits) {
   items = hits;
+  selection = summarySelection(hits[0]);
   position = 0;
   panel.closed = false;
   showCurrent();
@@ -74,6 +67,32 @@ function open(hits) {
 function clearSelection() {
   selectionLayer?.removeAll();
   items = [];
+  selection = null;
+}
+
+// After the map is redrawn for another determinand, year or partnership:
+// the panel stays open and is worked out again for the same place. find
+// (selection) returns that place's graphic in the new drawing, or null.
+export function refreshInfoPanel(find) {
+  if (!panel || panel.closed) return;
+  if (!selection) {
+    closeInfoPanel();
+    return;
+  }
+  const graphic = find(selection);
+  if (graphic) {
+    items = [graphic];
+    position = 0;
+    showCurrent();
+    return;
+  }
+  // No readings there now: say so, and keep the place outlined.
+  items = [];
+  panel.heading = "";
+  panel.description = "";
+  previous.hidden = true;
+  next.hidden = true;
+  body.replaceChildren(el("p", "readingNote", "This place has no readings for the determinand, year and partnership now selected."));
 }
 
 export function closeInfoPanel() {

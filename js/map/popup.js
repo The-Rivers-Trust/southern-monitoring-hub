@@ -8,6 +8,7 @@ import { el } from "../dom.js";
 import { provenanceText } from "../catalog.js";
 import { describeReading } from "../readings.js";
 import { PARTNERSHIP_FIELD } from "../data/readings-store.js";
+import { summaryStrip } from "./summary-strip.js";
 
 function formatDate(epoch, time) {
   if (epoch === null || epoch === undefined) return "Not recorded";
@@ -39,13 +40,6 @@ function detailsTable(rows) {
 
 const roundValue = (value) => String(Number(value.toPrecision(3)));
 
-function stat(label, value, hint) {
-  const node = el("div", "summaryStat");
-  node.append(el("span", "summaryStatLabel", label), el("span", "readingValue", value));
-  if (hint) node.append(el("span", "summaryStatHint", hint));
-  return node;
-}
-
 const readings = (count) => `${count} reading${count === 1 ? "" : "s"}`;
 
 // One line per way a reading fell short of exact: what was recorded, and
@@ -76,39 +70,44 @@ function estimatesNote(summary, unitText) {
   note.append(
     el("p", "rangesNoteTitle", `Not exact values: ${total} of ${readings(summary.count)}`),
     list,
-    el("p", null, "So the median and mean may be lower than the true values."),
+    el("p", null, "So the mean may be lower than the true value."),
   );
   return note;
 }
 
-export function summaryPopupContent(summary, metric) {
-  const withUnit = (value) => `${roundValue(value)} ${metric.unit}${metric.basis ? ` as ${metric.basis}` : ""}`;
+// The Environment Agency's sites behind the readings: name and how many
+// readings, longest first, with the rest counted.
+const MAX_SITES_SHOWN = 12;
+function eaSiteRows(sites) {
+  if (!sites?.length) return [];
+  const shown = sites.slice(0, MAX_SITES_SHOWN).map(([name, count]) => `${name} (${count})`);
+  if (sites.length > MAX_SITES_SHOWN) shown.push(`and ${sites.length - MAX_SITES_SHOWN} more`);
+  return [[sites.length === 1 ? "EA site" : `EA sites (${sites.length})`, shown.join(", ")]];
+}
+
+// Section 1: where the readings come from.
+export function summarySourcesContent(summary) {
   const root = popupRoot();
-  const stats = el("div", "summaryStats");
-  stats.append(stat("Median", withUnit(summary.median), "Colours the map"), stat("Mean", withUnit(summary.mean)));
-  root.append(stats);
+  root.append(detailsTable([
+    ["Waterbody", summary.waterbodyName],
+    ["Waterbody ID", summary.waterbodyId],
+    ["Area", summary.widthMetres ? `${summary.widthMetres} m hexagon` : "Whole waterbody"],
+    ...summary.sourceCounts.map(([label, count]) => [label, `${count} reading${count === 1 ? "" : "s"}`]),
+    ...eaSiteRows(summary.eaSites),
+  ]));
+  return root;
+}
+
+// Section 2: the readings in the year chosen (or all years), on the strip.
+export function summaryYearContent(summary, metric) {
+  const root = popupRoot();
+  root.append(summaryStrip(summary, metric));
   root.append(el("p", "readingNote", `From ${summary.count} reading${summary.count === 1 ? "" : "s"} in ${summary.place}. Zoom in for more detail.`));
   if (summary.estimates.length) root.append(estimatesNote(summary, ` ${metric.unit}`));
   if (summary.besideCount) {
     root.append(el("p", "readingNote", `Includes ${summary.besideCount} reading${summary.besideCount === 1 ? "" : "s"} from just outside the waterbody boundary, such as a tidal river channel.`));
   }
-  root.append(detailsTable([
-    ["Waterbody", summary.waterbodyName],
-    ["Waterbody ID", summary.waterbodyId],
-    ["Lowest", withUnit(summary.min)],
-    ["Highest", withUnit(summary.max)],
-    ["Year reported", yearReported(summary)],
-    ...summary.sourceCounts.map(([label, count], index) => [
-      index === 0 ? (summary.sourceCounts.length === 1 ? "Data source" : "Data sources") : "",
-      `${label}: ${count} reading${count === 1 ? "" : "s"}`,
-    ]),
-  ]));
   return root;
-}
-
-function yearReported({ reportedYear, minYear, maxYear }) {
-  if (reportedYear !== null) return String(reportedYear);
-  return minYear === maxYear ? `All years (${minYear})` : `All years (${minYear}–${maxYear})`;
 }
 
 export const reportTitle = (metric, year) => `${metric.label}, ${year === null ? "all years" : year}`;

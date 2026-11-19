@@ -9,19 +9,26 @@
 // The layer list only offers layers with something inside the selected
 // area, checked by asking each layer's service for a count.
 //
+// The layer list, basemap gallery and legend sit behind buttons on the
+// map, as on the AQuA dashboard (map/tool-panels.js).
+//
 // The river network is too dense to show for the whole region, so it's
 // off and out of the list until a partnership is picked.
 // =====================================================================
 
 import { getTheme, onThemeChange } from "./theme.js";
 import { areaExtent } from "./map/extents.js";
+import { setupToolPanels } from "./map/tool-panels.js";
 
 export const WEB_MAP_ID = "140a38bca4364ced9dd49b8c677346d8";
 const BASEMAP = { dark: "dark-gray-vector", light: "gray-vector" };
+// The gallery's choices: Esri basemaps that need no API key.
+const BASEMAPS = ["gray-vector", "dark-gray-vector", "streets-vector", "topo-vector", "terrain", "satellite", "hybrid", "osm"];
 
 let mapEl = null;
 let area = null;
 let Polygon = null;
+let geodesicBufferOperator = null;
 let filterGeometry = null;
 let partnership = null; // null means the whole region
 let layerListEl = null;
@@ -47,10 +54,16 @@ function applyRiverNetwork(leaving = false) {
   }
 }
 
+// The shapes are pulled in by this much, so a neighbouring partnership's
+// features that only touch the edge, or sit on it, are left out. Anything
+// with a real part inside is still found.
+const EDGE_INSET_METRES = 50;
+
 // The southern region, or one partnership in it.
 function regionPolygon() {
   const shapes = area.partnerships.filter((candidate) => partnership === null || candidate.name === partnership);
-  return new Polygon({ rings: shapes.flatMap((shape) => shape.rings), spatialReference: { wkid: 4326 } });
+  const polygon = new Polygon({ rings: shapes.flatMap((shape) => shape.rings), spatialReference: { wkid: 4326 } });
+  return geodesicBufferOperator.execute(polygon, -EDGE_INSET_METRES, { unit: "meters" }) ?? polygon;
 }
 
 function filterLayerView(layerView) {
@@ -119,7 +132,11 @@ export async function initMapExplorer(element, listElement, clipArea) {
     item.hidden = !isListed(item.layer);
   };
   area = clipArea;
-  [Polygon] = await $arcgis.import(["@arcgis/core/geometry/Polygon.js"]);
+  [Polygon, geodesicBufferOperator] = await $arcgis.import([
+    "@arcgis/core/geometry/Polygon.js",
+    "@arcgis/core/geometry/operators/geodesicBufferOperator.js",
+  ]);
+  await geodesicBufferOperator.load(); // the operator needs its engine ready
   filterGeometry = regionPolygon();
 
   mapEl.itemId = WEB_MAP_ID;
@@ -131,7 +148,14 @@ export async function initMapExplorer(element, listElement, clipArea) {
   // The web map's own starting view is all of England.
   mapEl.extent = areaExtent(area);
   mapEl.basemap = BASEMAP[getTheme()];
-  onThemeChange((theme) => { mapEl.basemap = BASEMAP[theme]; });
+  setupToolPanels(mapEl);
+  setupBasemapGallery();
+  // A basemap picked from the gallery is kept; only the light and dark
+  // gray pair, the theme's own, swap with the theme.
+  onThemeChange((theme) => {
+    const shown = mapEl.map.basemap?.id;
+    if (!shown || Object.values(BASEMAP).includes(shown) || !BASEMAPS.includes(shown)) mapEl.basemap = BASEMAP[theme];
+  });
   riverNetwork = mapEl.map.allLayers.find((layer) => layer.url?.includes(RIVER_NETWORK_SERVICE)) ?? null;
   riverNetworkWanted = riverNetwork?.visible ?? false;
   applyRiverNetwork();
@@ -143,6 +167,22 @@ export async function initMapExplorer(element, listElement, clipArea) {
   await layerListEl.componentOnReady?.();
   refreshList();
   updateLayerList();
+}
+
+async function setupBasemapGallery() {
+  const gallery = mapEl.closest(".view")?.querySelector("arcgis-basemap-gallery");
+  if (!gallery) return;
+  const [Basemap, LocalBasemapsSource] = await $arcgis.import([
+    "@arcgis/core/Basemap.js",
+    "@arcgis/core/widgets/BasemapGallery/support/LocalBasemapsSource.js",
+  ]);
+  gallery.source = new LocalBasemapsSource({
+    basemaps: BASEMAPS.map((id) => {
+      const basemap = Basemap.fromId(id);
+      basemap.id = id; // the gallery and the theme switch go by this
+      return basemap;
+    }),
+  });
 }
 
 // Narrows the filter to one partnership, or back to the whole region.

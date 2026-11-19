@@ -32,16 +32,28 @@
 .statusChip { border-inline-start: 10px solid var(--chip-colour); padding-inline-start: 6px; }
 .statusBlank { opacity: 0.6; }
 
-/* The tabs, with the close button at the far end. */
-.detailTabsBar { align-items: center; display: flex; gap: var(--space-2); }
-.detailTabsBar calcite-tab-nav { flex: 1; min-width: 0; }
-.detailTabsActions { display: flex; flex: none; }
+/* Sections one after the other in the panel's scroll. */
+.detailPane { border-top: 1px solid var(--border); padding-top: var(--space-3); }
+.detailPane:first-child { border-top: 0; padding-top: 0; }
+.detailPane + .detailPane { margin-top: var(--space-3); }
+.detailHeading { font-size: 13px; font-weight: 600; margin: 0 0 var(--space-2); }
+.detailPane:last-child { min-height: 120px; }
 
-/* Median and mean side by side. */
-.summaryStats { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); margin-bottom: 4px; }
-.summaryStat { display: flex; flex-direction: column; }
-.summaryStatLabel, .summaryStatHint { font-size: 12px; opacity: 0.75; }
-.summaryStat .readingValue { margin: 0; }
+/* Every reading on one line, with the mean (map/summary-strip.js). */
+.summaryStrip { margin: 0 0 8px; }
+.summaryStrip figcaption { font-size: 12px; margin-bottom: 2px; opacity: 0.85; }
+.summaryStrip svg { display: block; max-width: 640px; width: 100%; }
+.stripBand { fill: currentColor; fill-opacity: 0.07; }
+.stripDot { fill-opacity: 0.85; stroke: var(--calcite-color-foreground-1); stroke-width: 0.75; }
+.stripLimit { stroke: currentColor; stroke-dasharray: 3 3; stroke-opacity: 0.5; }
+.stripMean { stroke: currentColor; stroke-width: 2; }
+.stripMeanLabel { fill: currentColor; font-size: 11px; font-weight: 600; }
+.stripKey { display: flex; flex-wrap: wrap; font-size: 12px; gap: 2px 14px; margin: 4px 0 0; opacity: 0.85; }
+.stripKey span { align-items: center; display: inline-flex; gap: 5px; }
+.stripKey i { display: inline-block; flex: none; }
+.keyMean { background: currentColor; height: 12px; width: 2px; }
+.keyLimit { border-inline-start: 2px dashed currentColor; height: 12px; opacity: 0.6; width: 0; }
+.keyEstimate { background: #898781; height: 8px; transform: rotate(45deg); width: 8px; }
 
 /* Ranges from citizen science, called out so they're not missed. */
 .rangesNote { background: color-mix(in srgb, var(--calcite-color-status-warning) 12%, transparent); border-inline-start: 3px solid var(--calcite-color-status-warning); margin: 0 0 8px; padding: 6px 10px; }

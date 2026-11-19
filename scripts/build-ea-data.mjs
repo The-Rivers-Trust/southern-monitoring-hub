@@ -19,7 +19,8 @@ const RETRIES = 3;
 const catalog = JSON.parse(readFileSync("data/catalog.json", "utf8"));
 const area = JSON.parse(readFileSync(catalog.clipArea.file, "utf8"));
 const dataset = catalog.datasets.find((candidate) => candidate.source?.type === "static_files");
-const { apiUrl, firstYear, folder, samplingPointTypes, excludePurposes } = dataset.source;
+const { apiUrl, folder, samplingPointTypes, excludePurposes } = dataset.source;
+const { firstYear } = catalog; // the first year kept, for every dataset
 
 const metricIds = Object.keys(dataset.metrics);
 const codeInfo = new Map(metricIds.flatMap((id, metricIndex) =>
@@ -31,11 +32,20 @@ const years = process.argv.includes("--all")
   ? Array.from({ length: thisYear - firstYear + 1 }, (_, index) => firstYear + index)
   : [thisYear - 1, thisYear];
 
-async function fetchPage(partnership, year, skip) {
+const dayAfter = (date) => new Date(Date.parse(`${date}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
+
+// The API leaves out the dateTo day itself, and allows no more than a year
+// in one request. So a past year is two requests, the last day on its own.
+function dateRanges(year) {
+  if (year === thisYear) return [[`${year}-01-01`, dayAfter(today)]];
+  return [[`${year}-01-01`, `${year}-12-31`], [`${year}-12-31`, `${year + 1}-01-01`]];
+}
+
+async function fetchPage(partnership, from, to, skip) {
   const query = new URLSearchParams({
     determinand: [...codeInfo.keys()].join(","),
-    dateFrom: `${year}-01-01`,
-    dateTo: year === thisYear ? today : `${year}-12-31`,
+    dateFrom: from,
+    dateTo: to,
     samplingPointType: samplingPointTypes.join(","),
     skip: String(skip),
     limit: String(PAGE_SIZE),
@@ -62,11 +72,14 @@ async function fetchPage(partnership, year, skip) {
 
 async function fetchPartnership(partnership, year) {
   const observations = [];
-  for (;;) {
-    const page = await fetchPage(partnership, year, observations.length);
-    observations.push(...page);
-    if (page.length < PAGE_SIZE) return observations;
+  for (const [from, to] of dateRanges(year)) {
+    for (let skip = 0; ; skip += PAGE_SIZE) {
+      const page = await fetchPage(partnership, from, to, skip);
+      observations.push(...page);
+      if (page.length < PAGE_SIZE) break;
+    }
   }
+  return observations;
 }
 
 const isExcluded = (purpose) => excludePurposes.some((text) => purpose?.includes(text));
@@ -77,6 +90,7 @@ function buildYear(year, perPartnership, allSites) {
   perPartnership.forEach((observations, index) => {
     for (const observation of observations) {
       if (isExcluded(observation.samplingPurpose)) continue;
+      if (!observation.phenomenonTime.startsWith(String(year))) continue; // the first moment of the next year
       const point = observation.samplingPoint;
       const { metricIndex, rank } = codeInfo.get(observation.determinand.notation);
       const time = observation.phenomenonTime.slice(0, 16);
@@ -116,6 +130,7 @@ writeFileSync(sitesFile, `${JSON.stringify(allSites)}\n`);
 const yearsOnDisk = readdirSync(folder)
   .filter((name) => /^\d{4}\.json$/.test(name))
   .map((name) => Number(name.slice(0, 4)))
+  .filter((year) => year >= firstYear) // nothing earlier than the catalog's firstYear is kept
   .sort((a, b) => b - a);
 // Rewritten on every run, which also keeps the scheduled job active.
 writeFileSync(join(folder, "manifest.json"), `${JSON.stringify({ generatedOn: new Date().toISOString(), years: yearsOnDisk })}\n`);

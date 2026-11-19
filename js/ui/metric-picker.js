@@ -8,19 +8,19 @@
 
 import { sourcesFor } from "../catalog.js";
 
+// The count shows at the right of the row; when there isn't one, the
+// reason sits under the name instead.
 function describe(count, anyYearCount, hasSources, yearText) {
-  if (!hasSources) return "No data yet";
-  if (!anyYearCount) return "No readings in this area";
-  if (!count) return `No readings ${yearText}`;
-  return `${count.toLocaleString("en-GB")} reading${count === 1 ? "" : "s"}`;
+  if (!hasSources) return { note: "No data yet", count: "" };
+  if (!anyYearCount) return { note: "No readings in this area", count: "" };
+  if (!count) return { note: `No readings ${yearText}`, count: "" };
+  return { note: "", count: count.toLocaleString("en-GB") };
 }
 
-function swatch(metric) {
+function countLabel() {
   const node = document.createElement("span");
-  node.slot = "content-start";
-  node.className = "metricSwatch";
-  node.style.setProperty("--swatch-dark", metric.colour.dark);
-  node.style.setProperty("--swatch-light", metric.colour.light);
+  node.slot = "content-end";
+  node.className = "metricCount";
   return node;
 }
 
@@ -40,7 +40,7 @@ export function renderMetricPicker(listEl, catalog, selectedId, onOpen) {
     item.label = metric.label;
     item.value = metric.id;
     item.selected = metric.id === selectedId;
-    item.append(swatch(metric), chevron());
+    item.append(countLabel(), chevron());
     return item;
   });
   listEl.append(...items);
@@ -58,7 +58,10 @@ export function renderMetricPicker(listEl, catalog, selectedId, onOpen) {
   return (counts, anyYearCounts, yearText) => {
     for (const item of items) {
       const hasSources = sourcesFor(catalog, item.value).length > 0;
-      item.description = describe(counts.get(item.value), anyYearCounts.get(item.value), hasSources, yearText);
+      const { note, count } = describe(counts.get(item.value), anyYearCounts.get(item.value), hasSources, yearText);
+      item.description = note;
+      item.querySelector(".metricCount").textContent = count;
+      item.title = count ? `${count} reading${count === "1" ? "" : "s"} ${yearText}` : "";
       item.disabled = anyYearCounts.get(item.value) === 0;
     }
   };

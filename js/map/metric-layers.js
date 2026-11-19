@@ -8,11 +8,11 @@
 
 import { categoryExpression, category, isOnScale, stepLabels, FLAGGED, UNSCALED } from "../readings.js";
 import { PARTNERSHIP_FIELD, readingsFor, WATERBODY_FIELD } from "../data/readings-store.js";
-import { HEXAGON_MAX_SCALE, fromMercator } from "../aggregation.js";
+import { fromMercator } from "../aggregation.js";
 import { BAND_COLOURS, NEUTRAL, markerRing } from "../palette.js";
 import { popupContent, reportTitle } from "./popup.js";
-import { showSummaries } from "./summary-layers.js";
-import { closeInfoPanel } from "./info-panel.js";
+import { findSummaryGraphic, showSummaries } from "./summary-layers.js";
+import { refreshInfoPanel } from "./info-panel.js";
 
 // How far around the view individual readings are prepared, so small
 // pans don't need rebuilding.
@@ -108,13 +108,14 @@ function removeDetailLayers(mapEl) {
   detailBounds = null;
 }
 
-// The individual readings. There can be hundreds of thousands across
-// all years and each is costly to draw, so they're only built once
-// zoomed in that far, and only for the area around the view.
+// The individual readings, for a metric the hexagons can't summarise.
+// There can be hundreds of thousands across all years and each is
+// costly to draw, so only the area around the view is built. Where
+// there are hexagons they stay at every zoom and no points are drawn.
 export function syncDetailLayers(mapEl) {
   if (!drawing) return;
   const { summaries, sdk, metric, catalog, loaded, sources, theme } = drawing;
-  if (summaries.active && mapEl.scale > HEXAGON_MAX_SCALE) {
+  if (summaries.active) {
     removeDetailLayers(mapEl);
     return;
   }
@@ -145,8 +146,8 @@ export async function showMetric(mapEl, { catalog, loaded, metric, sources, them
   const summaries = await showSummaries(mapEl, { catalog, loaded, metric, sources, theme, year, partnership, waterbodies });
   shown = sources.map((source) => readingsFor(loaded, source, catalog.conventions, { year, partnership }));
 
-  // Readings no waterbody can summarise stay on the map as points until
-  // the individual readings take over. These hold one year's readings.
+  // Readings no waterbody can summarise stay on the map as points, at every
+  // zoom. These hold one year's readings.
   if (year !== builtYear) {
     outsideLayers.clear();
     builtYear = year;
@@ -160,16 +161,17 @@ export async function showMetric(mapEl, { catalog, loaded, metric, sources, them
     const layer = outsideLayers.get(key);
     layer.renderer = buildRenderer(source.mapping, metric, theme);
     layer.definitionExpression = partnershipFilter(partnership);
-    layer.maxScale = HEXAGON_MAX_SCALE;
     return layer;
   }) : [];
 
-  closeInfoPanel();
   removeDetailLayers(mapEl);
   mapEl.map.layers.removeMany(current);
   current = outsideReadings;
   mapEl.map.layers.addMany(current);
   drawing = { summaries, sdk, metric, catalog, loaded, sources, theme, year };
   syncDetailLayers(mapEl);
+  // The panel stays open and recalculates for the new determinand, year or
+  // partnership; a reading's panel can't, so that closes.
+  refreshInfoPanel(findSummaryGraphic);
   return summaries;
 }

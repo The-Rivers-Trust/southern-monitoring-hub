@@ -37,7 +37,7 @@ function legend(metric, sources, theme, summaries) {
     });
   }
   if (summaries.active) {
-    list.append(legendRow(marker("square", NEUTRAL), "Filled waterbody: median of the readings inside"));
+    list.append(legendRow(marker("square", NEUTRAL), "Filled waterbody: mean of the readings inside"));
     list.append(legendRow(marker("hexagon", NEUTRAL), `Zooming in splits each waterbody into hexagons, from ${hexagonWidthLabel(HEXAGON_LEVELS[0].widthMetres)} down to ${hexagonWidthLabel(HEXAGON_LEVELS.at(-1).widthMetres)} across`));
     list.append(legendRow(marker("outline"), "Outlined waterbody: no readings"));
   }

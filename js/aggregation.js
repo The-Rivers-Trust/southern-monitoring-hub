@@ -23,11 +23,8 @@ export const HEXAGON_LEVELS = [
   { widthMetres: 250, minScale: 100000, maxScale: 50000 },
   { widthMetres: 125, minScale: 50000, maxScale: 25000 },
   { widthMetres: 60, minScale: 25000, maxScale: 12500 },
-  { widthMetres: 30, minScale: 12500, maxScale: 6250 },
+  { widthMetres: 30, minScale: 12500, maxScale: 0 }, // the finest hexagons stay at every deeper zoom
 ];
-
-// Individual readings take over from here: the 100 m mark on the scale bar.
-export const HEXAGON_MAX_SCALE = HEXAGON_LEVELS.at(-1).maxScale;
 
 export function hexagonWidthLabel(widthMetres) {
   return widthMetres >= 1000 ? `${widthMetres / 1000} km` : `${widthMetres} m`;
@@ -130,12 +127,6 @@ function estimateGroups(rows) {
   });
 }
 
-export function median(values) {
-  const sorted = [...values].sort((a, b) => a - b);
-  const middle = Math.floor(sorted.length / 2);
-  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
-}
-
 // How many readings each dataset contributed, largest first.
 export function countBySource(rows) {
   const counts = new Map();
@@ -143,13 +134,22 @@ export function countBySource(rows) {
   return [...counts].sort((a, b) => b[1] - a[1]);
 }
 
+// The Environment Agency sites behind some readings, most readings first.
+export function countEaSites(rows) {
+  const counts = new Map();
+  for (const { eaSiteName } of rows) if (eaSiteName) counts.set(eaSiteName, (counts.get(eaSiteName) ?? 0) + 1);
+  return [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+}
+
 function summarise(rows) {
   const values = rows.map((row) => row.value);
   const years = rows.map((row) => row.year);
   return {
     sourceCounts: countBySource(rows),
+    eaSites: countEaSites(rows),
+    // Each reading, for the strip chart in the pop-up.
+    readings: rows.map((row) => ({ value: row.value, estimate: row.isEstimate, source: row.sourceLabel, site: row.siteName })),
     count: rows.length,
-    median: median(values),
     mean: values.reduce((sum, value) => sum + value, 0) / values.length,
     estimates: estimateGroups(rows),
     min: Math.min(...values),

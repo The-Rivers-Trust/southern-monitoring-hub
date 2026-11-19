@@ -13,8 +13,10 @@ export const UNSCALED = "unscaled";
 
 // The dataset-wide filter applied when loading: metric-level "is this a
 // real reading?" is decided afterwards by describeReading.
-export function baseWhere(dataset, now = new Date()) {
+export function baseWhere(dataset, now = new Date(), firstYear = null) {
   const parts = [];
+  // Nothing before the catalogue's firstYear is loaded (this also drops stray dates such as a year 26).
+  if (firstYear) parts.push(`${dataset.fields.date} >= TIMESTAMP '${firstYear}-01-01 00:00:00'`);
   if (dataset.filters?.excludeFutureDates) {
     parts.push(`${dataset.fields.date} <= TIMESTAMP '${now.toISOString().slice(0, 10)} 23:59:59'`);
   }

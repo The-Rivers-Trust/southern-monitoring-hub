@@ -314,7 +314,7 @@ function measureSection(spoke, sub, measure, catalog) {
   const metric = METRICS.find((candidate) => candidate.key === sub.key);
   const catalogMetric = metric && catalog.metrics.find((m) => m.id === metric.catalogId);
   section.append(el("p", null, metric
-    ? `The ${metric.aggregation} ${catalogMetric.label.toLowerCase()} across every reading in the waterbody, in ${catalogMetric.unit}${catalogMetric.basis ? ` as ${catalogMetric.basis}` : ""}, rated against the same bands as the Monitoring explorer.`
+    ? `The ${metric.aggregation} ${catalogMetric.label.toLowerCase()} across every reading in the waterbody, in ${catalogMetric.unit}${catalogMetric.basis ? ` as ${catalogMetric.basis}` : ""}, rated against the same bands as the Determinand explorer.`
     : MEASURE_DESCRIPTIONS[sub.key] ?? ""));
 
   section.append(el("h5", null, "Data sources"));
@@ -372,13 +372,13 @@ function generalSections(file) {
   [
     "Every reading is converted to the measure's unit first, such as phosphorus (P) to phosphate (PO₄) by × 3.066.",
     "Suspect values (outside an instrument's plausible range) are left out.",
-    "Only readings and surveys inside a waterbody's boundary count towards its scorecard. (The Monitoring explorer also counts those within 250 m of a boundary, such as in a tidal channel; the scorecard doesn't.)",
+    "Only readings and surveys inside a waterbody's boundary count towards its scorecard. (The Determinand explorer also counts those within 250 m of a boundary, such as in a tidal channel; the scorecard doesn't.)",
     `What counts as a site: Angling Trust, FreshWater Watch and River Guardians have no reliable site ID, since names are typed freely (with typos, and the same name used for different places) and a phone's GPS position moves a little each visit. So their samples within ${siteGroupDistance()} m of each other count as one site, named by its most common name and drawn as one mark on the map. NRS and Riverfly use their own site IDs.`,
     "Counting at the bottom of a range keeps a rating from being pushed up by a guess, so a rating may be lower than the true value.",
   ].forEach((line) => counted.append(el("li", null, line)));
   parts.push(counted);
 
-  parts.push(el("p", "guideProvisional", "These thresholds are a provisional first pass from the National River Survey dashboard, not a reviewed standard. They're set in data/scorecard.json; the nutrient bands are set in data/catalog.json and shared with the Monitoring explorer."));
+  parts.push(el("p", "guideProvisional", "These thresholds are a provisional first pass from the National River Survey dashboard, not a reviewed standard. They're set in data/scorecard.json; the nutrient bands are set in data/catalog.json and shared with the Determinand explorer."));
   return parts;
 }
 

@@ -9,7 +9,15 @@
   --text-secondary: var(--calcite-color-text-2);
   --text-muted: var(--calcite-color-text-3);
   --border: var(--calcite-color-border-2);
+  --accent: var(--calcite-color-brand);
+  --status-success: var(--calcite-color-status-success);
+  --status-warning: var(--calcite-color-status-warning);
   --status-danger: var(--calcite-color-status-danger);
+  --status-neutral: var(--calcite-color-text-3);
+  --status-success-bg: color-mix(in srgb, var(--status-success) 16%, transparent);
+  --status-warning-bg: color-mix(in srgb, var(--status-warning) 16%, transparent);
+  --status-danger-bg: color-mix(in srgb, var(--status-danger) 16%, transparent);
+  --status-neutral-bg: color-mix(in srgb, var(--status-neutral) 16%, transparent);
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;

@@ -11,7 +11,7 @@ import { el } from "../dom.js";
 import { getTheme, onThemeChange } from "../theme.js";
 import { shortPartnershipName } from "../ui/partnership-filter.js";
 import { areaExtent } from "../map/extents.js";
-import { setupLayersPanel } from "../map/layers-panel.js";
+import { addRiversAndFlow } from "../map/river-network.js";
 import { loadClassificationCatalog, loadSites } from "./data.js";
 import {
   CATEGORY_COLOURS,
@@ -72,7 +72,7 @@ function selectControl(labelText, options, value, onChange) {
 }
 
 export function initClassificationExplorer({ area, elements }) {
-  const { mapEl, modeEl, hintEl, optionsEl, listEl, detailsEl, infoPanel, infoBody, layersPanel, layersAction } = elements;
+  const { mapEl, modeEl, hintEl, optionsEl, listEl, detailsEl, infoPanel, infoBody } = elements;
 
   const state = {
     catalog: null,
@@ -84,9 +84,11 @@ export function initClassificationExplorer({ area, elements }) {
     round: LATEST,
     partnership: null,
     // Sites not classified in both rounds swamp the change map, so start hidden.
-    hidden: { coverage: new Set(), change: new Set(["unpaired"]), status: new Set() },
+    // The change map starts on just the sites that got better or worse.
+    hidden: { coverage: new Set(), change: new Set(["same", "unpaired"]), status: new Set() },
     selectedSite: null,
     lastYear: null, // coverage only: just the sites last classified this year
+    transition: null, // change only: just the sites that went { from, to } these statuses
   };
   let listItems = [];
   let ready = null;
@@ -183,8 +185,8 @@ export function initClassificationExplorer({ area, elements }) {
     const rounds = state.catalog.rounds;
     if (state.mode === "change") {
       optionsEl.append(
-        selectControl("From", [[FIRST, "Earliest classified"], ...rounds.slice(0, -1).map((round) => [round, String(round)])], state.from, (value) => { state.from = value; draw(); }),
-        selectControl("To", [[LATEST, "Latest classified"], ...rounds.slice(1).reverse().map((round) => [round, String(round)])], state.to, (value) => { state.to = value; draw(); }),
+        selectControl("From", [[FIRST, "Earliest classified"], ...rounds.slice(0, -1).map((round) => [round, String(round)])], state.from, (value) => { state.from = value; state.transition = null; draw(); }),
+        selectControl("To", [[LATEST, "Latest classified"], ...rounds.slice(1).reverse().map((round) => [round, String(round)])], state.to, (value) => { state.to = value; state.transition = null; draw(); }),
       );
     } else if (state.mode === "status") {
       optionsEl.append(selectControl("Round", [[LATEST, "Latest assessed"], ...[...rounds].reverse().map((round) => [round, String(round)])], state.round, (value) => { state.round = value; draw(); }));
@@ -217,9 +219,17 @@ export function initClassificationExplorer({ area, elements }) {
     const hidden = state.hidden[state.mode];
     const yearFilter = state.mode === "coverage" ? state.lastYear : null;
     const inYear = (site) => yearFilter === null || lastClassifiedYear(site.items[current.id]) === yearFilter;
+    const transition = state.mode === "change" ? state.transition : null;
+    const made = (site) => {
+      const record = site.items[current.id];
+      const change = changeOf(state.catalog, current, record, state.from, state.to);
+      return Boolean(change) && change.category !== "unpaired"
+        && record.statuses[change.from] === transition.from && record.statuses[change.to] === transition.to;
+    };
+    const inView = (site) => inYear(site) && (!transition || made(site));
     const byCategory = categoryFor(current);
-    const categoryOf = message ? () => null : (site) => (inYear(site) ? byCategory(site) : null);
-    const counts = message ? new Map(entries.map((entry) => [entry.id, 0])) : countsFor(current, here.filter(inYear));
+    const categoryOf = message ? () => null : (site) => (inView(site) ? byCategory(site) : null);
+    const counts = message ? new Map(entries.map((entry) => [entry.id, 0])) : countsFor(current, here.filter(inView));
 
     updateList(here);
     renderClassificationDetails(detailsEl, {
@@ -241,6 +251,12 @@ export function initClassificationExplorer({ area, elements }) {
         draw();
       },
       transitions: state.mode === "change" && !message ? transitions(state.catalog, current, here, state.from, state.to) : null,
+      fullCounts: state.mode === "change" && !message ? changeCounts(state.catalog, current, here, state.from, state.to) : null,
+      transition,
+      onPickTransition: (picked) => {
+        state.transition = picked;
+        draw();
+      },
       from: state.from,
       to: state.to,
       statusColours: statusColours(),
@@ -275,6 +291,7 @@ export function initClassificationExplorer({ area, elements }) {
       if (!id || id === state.itemId) return;
       state.itemId = id;
       state.lastYear = null;
+      state.transition = null;
       listItems.forEach((listItem) => { listItem.selected = listItem.value === id; });
       draw();
     };
@@ -307,6 +324,7 @@ export function initClassificationExplorer({ area, elements }) {
     modeEl.addEventListener("calciteSegmentedControlChange", () => {
       state.mode = modeEl.value;
       state.lastYear = null;
+      state.transition = null;
       renderOptions();
       draw();
     });
@@ -325,8 +343,7 @@ export function initClassificationExplorer({ area, elements }) {
 
     drawable = true;
     await draw();
-    setupLayersPanel(mapEl, layersPanel, layersAction, 0)
-      .catch((error) => console.error("Could not set up map layers", error));
+    addRiversAndFlow(mapEl, 0).catch((error) => console.error("Could not set up the river network", error));
   }
 
   return {
@@ -342,6 +359,7 @@ export function initClassificationExplorer({ area, elements }) {
     },
     setPartnership(name) {
       state.partnership = name;
+      state.transition = null;
       if (state.selectedSite && name !== null && state.selectedSite.partnership !== name) showSite(null);
       if (drawable) draw();
     },

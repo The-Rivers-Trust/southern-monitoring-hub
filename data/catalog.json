@@ -6,6 +6,7 @@
     "file": "data/clip-area.json",
     "sourceUrl": "https://services3.arcgis.com/Bb8lfThdhugyc4G3/arcgis/rest/services/CaBA_Partnerships/FeatureServer/0",
     "nameField": "CaBA_Partnership",
+    "idField": "CaBA_ID",
     "names": [
       "New Forest Catchment Partnership",
       "Arun & Western Streams Catchment Partnership",

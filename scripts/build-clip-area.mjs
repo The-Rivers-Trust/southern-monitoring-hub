@@ -23,7 +23,7 @@ async function query(url, params) {
 async function buildPartnerships() {
   const result = await query(clipArea.sourceUrl, {
     where: "1=1",
-    outFields: clipArea.nameField,
+    outFields: `${clipArea.nameField},${clipArea.idField}`,
     returnGeometry: "true",
     outSR: "4326", // what the monitoring datasets are stored in
     geometryPrecision: "6", // about 0.1 m
@@ -32,7 +32,7 @@ async function buildPartnerships() {
   // Matched after trimming: some names in the service end in a space.
   const wanted = new Set(clipArea.names);
   const partnerships = result.features
-    .map((feature) => ({ name: feature.attributes[clipArea.nameField].trim(), rings: feature.geometry.rings }))
+    .map((feature) => ({ name: feature.attributes[clipArea.nameField].trim(), cabaId: feature.attributes[clipArea.idField], rings: feature.geometry.rings }))
     .filter((partnership) => wanted.has(partnership.name));
 
   const found = new Set(partnerships.map((partnership) => partnership.name));

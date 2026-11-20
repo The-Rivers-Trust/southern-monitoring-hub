@@ -1,7 +1,7 @@
 // =====================================================================
 // MAIN
 // Start-up: the shared header and tabs, then each tab on first opening.
-// The Monitoring explorer loads the clipped readings and draws a metric.
+// The Determinand explorer loads the clipped readings and draws a metric.
 // =====================================================================
 
 import { loadCatalog, loadClipArea, loadWaterbodies, sourcesFor } from "./catalog.js";
@@ -11,22 +11,22 @@ import { renderMetricPicker } from "./ui/metric-picker.js";
 import { renderYearFilter } from "./ui/year-filter.js";
 import { renderPartnershipFilter, shortPartnershipName } from "./ui/partnership-filter.js";
 import { openDataSources } from "./ui/data-sources-panel.js";
-import { renderDetails } from "./ui/details-panel.js";
+import { renderDatasetInfo, renderLegend } from "./ui/details-panel.js";
+import { setupToolPanels } from "./map/tool-panels.js";
 import { countInView, showMetric, syncDetailLayers } from "./map/metric-layers.js";
 import { areaExtent, partnershipExtent } from "./map/extents.js";
 import { fillVisibleHexagons } from "./map/summary-layers.js";
-import { setupLayersPanel } from "./map/layers-panel.js";
+import { addRiversAndFlow } from "./map/river-network.js";
 import { initInfoPanel } from "./map/info-panel.js";
-import { initClassificationExplorer } from "./classification/explorer.js";
 import { initMapExplorer, setMapExplorerPartnership } from "./map-explorer.js";
-import { initScorecardsTab, setScorecardsPartnership } from "./scorecards/scorecards-tab.js";
 import { el } from "./dom.js";
 
 const BASEMAP = { dark: "dark-gray-vector", light: "gray-vector" };
 const DEFAULT_YEAR = 2026;
 
 const mapEl = document.getElementById("map");
-const detailsEl = document.getElementById("details");
+const legendEl = document.getElementById("legendBody");
+const datasetEl = document.getElementById("datasetBody");
 const listEl = document.getElementById("metricList");
 
 let catalog;
@@ -46,13 +46,10 @@ let viewTimer;
 let levelTimer;
 let updatePicker;
 let classificationExplorer = null;
+let scorecardsModule = null; // loaded when the Scorecards tab is first opened
+let waterbodiesReady = null; // the waterbody shapes (3 MB), fetched alongside the first tab
 
 const yearText = () => (selectedYear === null ? "across all years" : `in ${selectedYear}`);
-
-function clipNote() {
-  if (selectedPartnership === null) return `Only readings inside the ${area.partnerships.length} CaBA partnerships are shown.`;
-  return `Showing ${shortPartnershipName(selectedPartnership)} only. A waterbody belongs to the partnership its centre falls in, and its readings go with it.`;
-}
 
 const isEnabled = ({ dataset }) => !disabledDatasets.has(dataset.id);
 const currentFilters = () => ({ year: selectedYear, partnership: selectedPartnership });
@@ -131,15 +128,11 @@ async function draw() {
     waterbodies,
   });
   if (request !== latestRequest) return;
-  setCounts = renderDetails(detailsEl, {
-    metric,
+  setCounts = renderLegend(legendEl, { metric, sources, yearText: yearText() });
+  renderDatasetInfo(datasetEl, {
     sources,
-    theme,
     conventions: catalog.conventions,
-    clipNote: clipNote(),
     noSourcesNote: noSourcesNote(metric),
-    yearText: yearText(),
-    summaries,
   });
   await refreshCounts(request);
 }
@@ -165,7 +158,7 @@ function applyFilters() {
 // A year's files are only fetched when it's first chosen.
 async function selectYear(year) {
   selectedYear = year;
-  const summary = detailsEl.querySelector(".summary");
+  const summary = legendEl.querySelector(".summary");
   if (summary) summary.textContent = "Loading readings…";
   try {
     await ensureYearLoaded(catalog, loaded, year);
@@ -205,36 +198,48 @@ const TAB_STARTS = {
     console.error(error);
     document.getElementById("webMapNote").textContent = "The Southern Data Hub map couldn't be loaded. Please refresh the page.";
   }),
-  monitoring: () => startMonitoring().catch((error) => {
-    console.error(error);
-    showError(detailsEl, "The monitoring data couldn't be loaded. Please refresh the page.");
-  }),
-  scorecards: () => initScorecardsTab({
-    mapEl: scorecardsMapEl,
-    hintEl: document.getElementById("scorecardsHint"),
-    keyEl: document.getElementById("scorecardsKey"),
-    sourcesEl: document.getElementById("scorecardSources"),
-    guide: {
-      dialogEl: document.getElementById("scorecardGuide"),
-      bodyEl: document.getElementById("scorecardGuideBody"),
-      openEls: [document.getElementById("scorecardGuideButton"), document.getElementById("healthGuide")],
-    },
-    deselectEl: document.getElementById("deselectWaterbody"),
-    errorAlertEl: document.getElementById("pdfErrorAlert"),
-    dates: { periodEl: document.getElementById("scorecardPeriod") },
-    health: {
-      panelEl: document.getElementById("healthPanel"),
-      pdfEl: document.getElementById("healthPdf"),
-      coverageEl: document.getElementById("healthCoverage"),
-      wheelSvg: document.getElementById("healthWheel"),
-      keyEl: document.getElementById("healthKey"),
-      detailEl: document.getElementById("healthDetail"),
-    },
-  }, { catalog, area, waterbodies, partnership: selectedPartnership }).catch((error) => {
-    console.error(error);
-    document.getElementById("scorecardsHint").textContent = "The scorecards couldn't be loaded. Please refresh the page.";
-  }),
-  classification: () => {
+  monitoring: async () => {
+    try {
+      waterbodies = await waterbodiesReady;
+      await startMonitoring();
+    } catch (error) {
+      console.error(error);
+      showError(legendEl, "The monitoring data couldn't be loaded. Please refresh the page.");
+    }
+  },
+  scorecards: async () => {
+    try {
+      waterbodies = await waterbodiesReady;
+      scorecardsModule = await import("./scorecards/scorecards-tab.js");
+      await scorecardsModule.initScorecardsTab({
+        mapEl: scorecardsMapEl,
+        hintEl: document.getElementById("scorecardsHint"),
+        keyEl: document.getElementById("scorecardsKey"),
+        sourcesEl: document.getElementById("scorecardSources"),
+        guide: {
+          dialogEl: document.getElementById("scorecardGuide"),
+          bodyEl: document.getElementById("scorecardGuideBody"),
+          openEls: [document.getElementById("scorecardGuideButton"), document.getElementById("healthGuide")],
+        },
+        deselectEl: document.getElementById("deselectWaterbody"),
+        errorAlertEl: document.getElementById("pdfErrorAlert"),
+        dates: { periodEl: document.getElementById("scorecardPeriod") },
+        health: {
+          panelEl: document.getElementById("healthPanel"),
+          pdfEl: document.getElementById("healthPdf"),
+          coverageEl: document.getElementById("healthCoverage"),
+          wheelSvg: document.getElementById("healthWheel"),
+          keyEl: document.getElementById("healthKey"),
+          detailEl: document.getElementById("healthDetail"),
+        },
+      }, { catalog, area, waterbodies, partnership: selectedPartnership });
+    } catch (error) {
+      console.error(error);
+      document.getElementById("scorecardsHint").textContent = "The scorecards couldn't be loaded. Please refresh the page.";
+    }
+  },
+  classification: async () => {
+    const { initClassificationExplorer } = await import("./classification/explorer.js");
     classificationExplorer = initClassificationExplorer({
       area,
       elements: {
@@ -246,8 +251,6 @@ const TAB_STARTS = {
         detailsEl: document.getElementById("clsDetails"),
         infoPanel: document.getElementById("clsInfoPanel"),
         infoBody: document.getElementById("clsInfoBody"),
-        layersPanel: document.getElementById("clsLayersPanel"),
-        layersAction: document.getElementById("clsLayersAction"),
       },
     });
     classificationExplorer.setPartnership(selectedPartnership);
@@ -298,6 +301,7 @@ async function startMonitoring() {
   const reading = loadReadings(catalog, area, waterbodies);
   mapEl.extent = areaExtent(area);
   mapEl.popupDisabled = true; // clicks open the bottom panel instead
+  setupToolPanels(mapEl);
   await mapEl.viewOnReady();
   await initInfoPanel(
     mapEl,
@@ -329,12 +333,7 @@ async function startMonitoring() {
 
   // Rivers go at the bottom, behind all the metric layers. A failure
   // here shouldn't take the monitoring data down with it.
-  setupLayersPanel(
-    mapEl,
-    document.getElementById("layersPanel"),
-    document.getElementById("layersAction"),
-    0,
-  ).catch((error) => console.error("Could not set up map layers", error));
+  addRiversAndFlow(mapEl, 0).catch((error) => console.error("Could not set up the river network", error));
 
   mapEl.addEventListener("arcgisViewChange", () => {
     // Short wait, so a fast zoom doesn't prepare every level it passes.
@@ -354,14 +353,18 @@ async function startMonitoring() {
 async function start() {
   initTheme(document.getElementById("themeToggle"));
   catalog = await loadCatalog();
-  [area, waterbodies] = await Promise.all([loadClipArea(catalog), loadWaterbodies(catalog)]);
+  area = await loadClipArea(catalog);
+  // Only the monitoring and scorecards tabs need the waterbody shapes, so the
+  // first tab doesn't wait for them. A failure shows when one of those opens.
+  waterbodiesReady = loadWaterbodies(catalog);
+  waterbodiesReady.catch(() => {});
 
   renderPartnershipFilter(document.getElementById("partnershipSelect"), area.partnerships.map((partnership) => partnership.name), (name) => {
     selectedPartnership = name;
     if (updatePicker) applyFilters(); // the monitoring explorer, once started
     classificationExplorer?.setPartnership(name);
     setMapExplorerPartnership(name);
-    setScorecardsPartnership(name);
+    scorecardsModule?.setScorecardsPartnership(name);
     zoomToSelection();
   });
   initViewSwitching();
@@ -370,6 +373,6 @@ async function start() {
 
 start().catch((error) => {
   console.error(error);
-  showError(detailsEl, "The hub couldn't be loaded. Please refresh the page.");
+  showError(legendEl, "The hub couldn't be loaded. Please refresh the page.");
   document.getElementById("webMapNote").textContent = "The hub couldn't be loaded. Please refresh the page.";
 });

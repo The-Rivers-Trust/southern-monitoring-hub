@@ -37,7 +37,9 @@ const dayAfter = (date) => new Date(Date.parse(`${date}T00:00:00Z`) + 86400000).
 // The API leaves out the dateTo day itself, and allows no more than a year
 // in one request. So a past year is two requests, the last day on its own.
 function dateRanges(year) {
-  if (year === thisYear) return [[`${year}-01-01`, dayAfter(today)]];
+  // The current year runs to today; on 31 December that is a whole year too,
+  // so it is split like a past one (Jan 1 to Jan 1 would be refused).
+  if (year === thisYear && today < `${year}-12-31`) return [[`${year}-01-01`, dayAfter(today)]];
   return [[`${year}-01-01`, `${year}-12-31`], [`${year}-12-31`, `${year + 1}-01-01`]];
 }
 

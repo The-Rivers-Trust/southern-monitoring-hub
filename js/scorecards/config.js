@@ -66,15 +66,16 @@ export const MAP = {
 export const RIVER_NETWORK = {
   url: "https://services3.arcgis.com/Bb8lfThdhugyc4G3/arcgis/rest/services/OpenRiverNetwork_CaBA_ID/FeatureServer/0",
   title: "Open River Network",
-  color: "#0277bd",
+  color: [56, 135, 185, 0.8], // the NRS dashboard's soft blue
   widthByStrahler: [
-    { value: 1, size: 0.4 },
-    { value: 2, size: 0.8 },
-    { value: 3, size: 1.3 },
-    { value: 4, size: 2 },
-    { value: 5, size: 3 },
-    { value: 7, size: 5 },
+    { value: 1, size: 0.3 },
+    { value: 2, size: 0.6 },
+    { value: 3, size: 1 },
+    { value: 4, size: 1.55 },
+    { value: 5, size: 2.3 },
+    { value: 7, size: 3.9 },
   ],
+  flowTitle: "River flow direction",
 };
 
 // Storm overflow outfalls are drawn as this emoji, so they never read

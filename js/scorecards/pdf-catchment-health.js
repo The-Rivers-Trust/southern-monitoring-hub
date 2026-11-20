@@ -1,27 +1,33 @@
 // =====================================================================
 // CATCHMENT HEALTH PDF
-// A4, portrait.
-//   Page 1 - summary: header with the overall rating, the wheel beside a
-//            map, a "themes at a glance" table and the data sources.
-//   Page 2+ - detail: a section per wired theme. Nutrients & Sediment is
-//            a two-column grid of trend charts; the others a table of
-//            measure / rating / evidence.
-// Every rating is drawn the same way - a coloured dot and its label -
-// and every block is measured before it's drawn, so nothing is split
-// across a page break.
+// A4, portrait, always two pages, and every scorecard has the same layout:
+// each thing has a slot of a fixed size in a fixed place, whether or not
+// there is data for it. A slot with nothing to show says so in grey.
+//
+//   Page 1 - the headline: the title and overall rating, the wheel beside a
+//            map, the eight themes' ratings, the six nutrient charts, and
+//            the data sources.
+//   Page 2 - the evidence: a card for each measure (visible pollution,
+//            wildlife, riverfly, invasives, action), the habitat card and
+//            its subreaches, notes, and a strip for themes not yet assessed.
+//
+// Lists that vary in length are cut to a fixed number of rows ("and 3
+// more" for the rest), so nothing can push a slot out of place. If a slot
+// ever overflowed, a warning goes to the console.
 // =====================================================================
 
-import { CATCHMENT_HEALTH_SPOKES, RATING_BANDS } from "./config.js";
+import { CATCHMENT_HEALTH_SPOKES, INVASIVE_PLANT_FIELDS, RATING_BANDS, SCORECARD } from "./config.js";
 import { getMetric } from "./metrics.js";
 import { bandForRank, catchmentHealthRanks, themeRank, catchmentHealthOverallRank } from "./ratings.js";
-import { catchmentHealthWheelImage, WHEEL_IMAGE_ASPECT } from "./charts/wheels.js";
+import { catchmentHealthWheelImage } from "./charts/wheels.js";
 import { barChartImage } from "./charts/bar-chart.js";
-import { BREAKDOWNS, breakdownRows, dataSourceRows, habitatPartRows, habitatSubreachRows, isSignsLine, subDetailLines } from "./scorecard-text.js";
+import { dataSourceRows, habitatSubreachRows } from "./scorecard-text.js";
+import { formatNumber } from "./format.js";
 import { rect, text, rgb } from "./pdf-common.js";
+import { CONTENT_W, MAP_GAP, MAP_W, PAGE, ROW_H, WHEEL_W } from "./pdf-layout.js";
 
-const PAGE = { width: 210, height: 297, margin: 18 };
-const CONTENT_W = PAGE.width - PAGE.margin * 2;
-const CONTENT_BOTTOM = PAGE.height - 18; // footer rule sits 3mm below this
+const M = PAGE.margin;
+const CONTENT_BOTTOM = PAGE.height - 18; // the footer rule sits 3 mm below this
 const COLOR = {
   ink: "#1f2933",
   body: "#3e4c59",
@@ -29,20 +35,44 @@ const COLOR = {
   rule: "#dde2e8",
   panel: "#f5f7fa",
   noData: "#c3cad3",
+  bar: "#9fb3c8",
+  seen: "#d55181",
 };
 const CADENCE = { day: "daily", week: "weekly", month: "monthly" };
-// Chart height / width - low enough for the six nutrient charts to share
-// a page with the other themes.
+// Chart height / width of one nutrient chart.
 const CHART_ASPECT = 0.34;
+// How many rows each variable list gets.
+const SIGN_ROWS = 4;
+const SUBREACH_ROWS = 6;
+// The data sources always listed, in this order, with the name shown for each.
+const SOURCE_SLOTS = [
+  ["National River Survey", "National River Survey"],
+  ["FreshWater Watch", "FreshWater Watch"],
+  ["Angling Trust WQMN", "Angling Trust WQMN"],
+  ["River Guardians", "River Guardians"],
+  ["Environment Agency", "Environment Agency"],
+  ["Riverfly", "Riverfly"],
+  ["Modular River Survey (MoRPh)", "MoRPh"],
+  ["Nature-Based Solutions Interventions (NBS)", "Nature-Based Solutions"],
+];
 
 // ---- Small drawing helpers ----
 
-function rule(doc, y, x = PAGE.margin, width = CONTENT_W) {
+const plural = (n, word, many = `${word}s`) => `${n.toLocaleString("en-GB")} ${n === 1 ? word : many}`;
+
+function rule(doc, y, x = M, width = CONTENT_W) {
   rect(doc, x, y, width, 0.25, COLOR.rule);
 }
 
 function eyebrow(doc, label, x, y, align) {
   text(doc, label.toUpperCase(), x, y, { fontSize: 7, bold: true, color: COLOR.muted, spaced: true, align });
+}
+
+// A section heading: the label, an optional rating at the right, a rule.
+function sectionHeading(doc, label, y, band) {
+  eyebrow(doc, label, M, y);
+  if (band !== undefined) ratingMark(doc, band, M + CONTENT_W, y, { fontSize: 7.5, align: "right" });
+  rule(doc, y + 2.5);
 }
 
 // A rating: coloured dot + label. Returns the width used. align "right"
@@ -61,6 +91,16 @@ function ratingMark(doc, band, x, y, { fontSize = 8.5, align = "left", label } =
   return width;
 }
 
+// One line of text that fits the width, with "..." if it had to be cut.
+function fit(doc, value, width, fontSize, style = "normal") {
+  doc.setFont("helvetica", style);
+  doc.setFontSize(fontSize);
+  let line = String(value ?? "");
+  if (doc.getTextWidth(line) <= width) return line;
+  while (line.length > 1 && doc.getTextWidth(`${line}...`) > width) line = line.slice(0, -1);
+  return `${line.trimEnd()}...`;
+}
+
 function wrap(doc, value, width, fontSize, style = "normal") {
   doc.setFont("helvetica", style);
   doc.setFontSize(fontSize);
@@ -70,306 +110,369 @@ function wrap(doc, value, width, fontSize, style = "normal") {
 // Line height in mm for a font size in pt.
 const lineH = (fontSize) => fontSize * 0.42;
 
-// ---- Data for the summary page ----
+// A line of grey text for a slot with nothing in it.
+function noData(doc, words, x, y) {
+  text(doc, words, x, y, { fontSize: 7, italic: true, color: COLOR.muted });
+}
+
+// A card: a tinted panel with a title, and the rating at the right.
+function card(doc, x, y, w, h, title, band, { dashed = false } = {}) {
+  if (dashed) {
+    doc.setDrawColor(...rgb(COLOR.noData));
+    doc.setLineWidth(0.25);
+    doc.setLineDashPattern([1.2, 1.2], 0);
+    doc.roundedRect(x, y, w, h, 1, 1, "S");
+    doc.setLineDashPattern([], 0);
+  } else {
+    rect(doc, x, y, w, h, COLOR.panel, { radius: 1 });
+  }
+  text(doc, fit(doc, title, w - 24, 8.5, "bold"), x + 2.5, y + 5.2, { fontSize: 8.5, bold: true, color: dashed ? COLOR.muted : COLOR.ink });
+  if (!dashed) ratingMark(doc, band, x + w - 2.5, y + 5.2, { fontSize: 7.5, align: "right" });
+}
+
+// A row of a card: a label, a bar (a fraction of the width), and a value.
+// fraction null draws an empty slot with a dash.
+function barRow(doc, x, y, w, { label, fraction, value }, labelShare = 0.5) {
+  const labelW = w * labelShare;
+  const barW = w - labelW - 9;
+  const empty = fraction === null;
+  text(doc, fit(doc, label, labelW - 1.5, 7), x, y, { fontSize: 7, color: empty ? COLOR.muted : COLOR.body });
+  rect(doc, x + labelW, y - 2.2, barW, 2.2, COLOR.rule);
+  if (!empty && fraction > 0) rect(doc, x + labelW, y - 2.2, Math.max(barW * Math.min(fraction, 1), 0.5), 2.2, COLOR.bar);
+  text(doc, empty ? "-" : value, x + w, y, { fontSize: 7, color: empty ? COLOR.muted : COLOR.ink, align: "right" });
+}
+
+// ---- Data ----
 
 function themeSummaries(ranks) {
   return CATCHMENT_HEALTH_SPOKES.map((spoke) => {
-    if (!spoke.wired) return { spoke, band: null, basis: "Not yet assessed", wired: false };
-    const rated = spoke.subs.filter((s) => ranks[s.key] != null).length;
-    return {
-      spoke,
-      band: bandForRank(themeRank(spoke, ranks)),
-      basis: `${rated} of ${spoke.subs.length} measure${spoke.subs.length === 1 ? "" : "s"} rated`,
-      wired: true,
-    };
+    if (!spoke.wired) return { spoke, band: null, wired: false };
+    return { spoke, band: bandForRank(themeRank(spoke, ranks)), wired: true };
   });
 }
 
+const percent = (fraction) => `${Math.round(100 * fraction)}%`;
+
 export function buildCatchmentHealthPdf(JsPDF, { waterbodyName, waterBodyId, scorecard, screenshot, dateRangeText, granularity, equipmentRanges }) {
   const doc = new JsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  const M = PAGE.margin;
   const ranks = catchmentHealthRanks(scorecard);
   const overall = bandForRank(catchmentHealthOverallRank(scorecard));
   const generated = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+  const warn = (what, y) => { if (y > CONTENT_BOTTOM) console.warn(`Scorecard PDF: ${what} runs past the page bottom (${y.toFixed(1)} mm).`); };
+  const topStrip = () => rect(doc, 0, 0, PAGE.width, 2, overall?.color ?? COLOR.noData);
 
-  // ================= Page 1: summary =================
-  // A thin strip of the overall rating's colour across the top.
-  rect(doc, 0, 0, PAGE.width, 2, overall?.color ?? COLOR.noData);
-
+  // ================= Page 1: the headline =================
+  topStrip();
   eyebrow(doc, "Catchment Health Scorecard", M, 16);
-  const titleLines = wrap(doc, waterbodyName, CONTENT_W - 52, 20, "bold");
-  text(doc, titleLines, M, 25, { fontSize: 20, bold: true, color: COLOR.ink });
-  let y = 25 + (titleLines.length - 1) * lineH(20) * 1.15;
+  // One line, whatever the name: the type shrinks (to a floor) and then cuts.
+  let titleSize = 20;
+  doc.setFont("helvetica", "bold");
+  while (titleSize > 13) {
+    doc.setFontSize(titleSize);
+    if (doc.getTextWidth(waterbodyName) <= CONTENT_W - 52) break;
+    titleSize -= 1;
+  }
+  text(doc, fit(doc, waterbodyName, CONTENT_W - 52, titleSize, "bold"), M, 25, { fontSize: titleSize, bold: true, color: COLOR.ink });
   const meta = [waterBodyId && `WFD ${waterBodyId}`, `Period: ${dateRangeText}`, `Generated ${generated}`].filter(Boolean).join("   ·   ");
-  text(doc, meta, M, y + 7, { fontSize: 8, color: COLOR.muted });
-
-  // Overall rating, top right.
+  text(doc, fit(doc, meta, CONTENT_W - 52, 8), M, 32, { fontSize: 8, color: COLOR.muted });
   eyebrow(doc, "Overall rating", PAGE.width - M, 16, "right");
   ratingMark(doc, overall, PAGE.width - M, 25, { fontSize: 15, align: "right" });
-
-  y += 12;
-  rule(doc, y);
-  y += 7;
+  rule(doc, 37);
 
   // Wheel and map, side by side, same height.
-  const colGap = 8;
-  const colW = (CONTENT_W - colGap) / 2;
-  const rowH = colW * WHEEL_IMAGE_ASPECT;
-  doc.addImage(catchmentHealthWheelImage(scorecard, 900), "PNG", M, y, colW, rowH);
-  const mapX = M + colW + colGap;
-  rect(doc, mapX, y, colW, rowH, COLOR.panel, { radius: 1.5, borderHex: COLOR.rule });
+  let y = 43;
+  doc.addImage(catchmentHealthWheelImage(scorecard, 900), "PNG", M, y, WHEEL_W, ROW_H);
+  const mapX = M + WHEEL_W + MAP_GAP;
   if (screenshot) {
-    // Contain-fit inside the frame.
-    const pad = 2;
-    const aspect = screenshot.data.height / screenshot.data.width;
-    let w = colW - pad * 2;
-    let h = w * aspect;
-    if (h > rowH - pad * 2) {
-      h = rowH - pad * 2;
-      w = h / aspect;
-    }
-    doc.addImage(screenshot.dataUrl, "PNG", mapX + (colW - w) / 2, y + (rowH - h) / 2, w, h);
+    // The picture is cut to this slot's shape already.
+    doc.addImage(screenshot.dataUrl, "PNG", mapX, y, MAP_W, ROW_H);
+    doc.setDrawColor(...rgb(COLOR.rule));
+    doc.setLineWidth(0.2);
+    doc.rect(mapX, y, MAP_W, ROW_H, "S");
+  } else {
+    rect(doc, mapX, y, MAP_W, ROW_H, COLOR.panel, { radius: 1 });
+    noData(doc, "Map not available", mapX + 3, y + 6);
   }
-  y += rowH + 10;
+  y += ROW_H + 7;
 
-  // Themes at a glance.
-  eyebrow(doc, "Themes at a glance", M, y);
-  y += 3;
-  rule(doc, y);
-  const col = { theme: M, rating: M + 78, basis: M + 118 };
-  y += 2;
-  text(doc, "Theme", col.theme, y + 3.5, { fontSize: 7.5, bold: true, color: COLOR.muted });
-  text(doc, "Rating", col.rating, y + 3.5, { fontSize: 7.5, bold: true, color: COLOR.muted });
-  text(doc, "Basis", col.basis, y + 3.5, { fontSize: 7.5, bold: true, color: COLOR.muted });
+  // Theme ratings: eight fixed slots, four across.
+  sectionHeading(doc, "Theme ratings", y);
+  y += 5;
+  const themeCellW = CONTENT_W / 4;
+  themeSummaries(ranks).forEach((row, i) => {
+    const x = M + (i % 4) * themeCellW;
+    const top = y + Math.floor(i / 4) * 11;
+    text(doc, fit(doc, row.spoke.label, themeCellW - 3, 8, row.wired ? "bold" : "normal"), x, top + 3.5, { fontSize: 8, bold: row.wired, color: row.wired ? COLOR.ink : COLOR.muted });
+    if (row.wired) ratingMark(doc, row.band, x, top + 8, { fontSize: 7.5 });
+    else text(doc, "Not yet assessed", x, top + 8, { fontSize: 7, italic: true, color: COLOR.muted });
+  });
+  y += 22 + 7;
+
+  // Nutrients and sediment: six charts, three across.
+  const nutrients = CATCHMENT_HEALTH_SPOKES.find((spoke) => spoke.key === "nutrients");
+  sectionHeading(doc, "Nutrients and sediment", y, bandForRank(themeRank(nutrients, ranks)));
+  y += 5;
+  const gap = 5;
+  const cellW = (CONTENT_W - gap * 2) / 3;
+  const chartH = cellW * CHART_ASPECT;
+  const cellH = 5 + chartH + 5;
+  nutrients.subs.forEach((sub, i) => {
+    const x = M + (i % 3) * (cellW + gap);
+    const top = y + Math.floor(i / 3) * (cellH + 3);
+    const metric = getMetric(sub.key);
+    text(doc, fit(doc, `${sub.label}${metric ? ` (${metric.unit})` : ""}`, cellW - 17, 7.5, "bold"), x, top + 3.4, { fontSize: 7.5, bold: true, color: COLOR.ink });
+    ratingMark(doc, bandForRank(ranks[sub.key]), x + cellW, top + 3.4, { fontSize: 7, align: "right" });
+    const series = scorecard[`${sub.key}Series`] ?? [];
+    const image = metric && barChartImage(metric, series, granularity, equipmentRanges[sub.key]?.max, 340, Math.round(340 * CHART_ASPECT), { showTitle: false });
+    if (image) {
+      doc.addImage(image, "PNG", x, top + 5, cellW, chartH);
+    } else {
+      rect(doc, x, top + 5, cellW, chartH, COLOR.panel, { radius: 1 });
+      noData(doc, "No readings in this period", x + cellW / 2 - 18, top + 5 + chartH / 2 + 1);
+    }
+    const value = scorecard[`${sub.key}Value`];
+    const readings = scorecard[`${sub.key}ReadingCount`] ?? 0;
+    const caption = value == null ? "No readings in this period" : `${formatNumber(value)} ${metric?.unit ?? ""} (${metric?.aggregation ?? "value"} of ${plural(readings, "reading")})`;
+    text(doc, fit(doc, caption, cellW, 6.8), x, top + 5 + chartH + 3.2, { fontSize: 6.8, color: value == null ? COLOR.muted : COLOR.body, italic: value == null });
+  });
+  y += 2 * cellH + 3 + 4;
+  const cadence = CADENCE[granularity] ?? "monthly";
+  text(doc, `Bars are ${cadence} averages across every site and source, over the rating bands.`, M, y, { fontSize: 6.8, italic: true, color: COLOR.muted });
+  y += 7;
+
+  // Data sources: eight fixed slots, two columns.
+  sectionHeading(doc, "Data sources", y);
+  y += 5;
+  const rows = dataSourceRows(scorecard);
+  const rowFor = (name) => rows.find((row) => row.name === name) ?? rows.find((row) => row.name === `${name} (switched off)`);
+  const colW = (CONTENT_W - 6) / 2;
+  SOURCE_SLOTS.forEach(([name, shown], i) => {
+    const x = M + (i % 2) * (colW + 6);
+    const top = y + Math.floor(i / 2) * 6.2;
+    const row = rowFor(name);
+    const off = row?.name.endsWith("(switched off)");
+    let coverage = row?.coverage ?? "";
+    if (name.startsWith("Modular River Survey") && scorecard.habitat?.modules.length) {
+      coverage = `${plural(scorecard.habitat.subreaches.length, "subreach", "subreaches")}, ${plural(scorecard.habitat.modules.length, "module")}`;
+    }
+    text(doc, shown, x, top + 4, { fontSize: 7.5, bold: !!row && !off, color: row && !off ? COLOR.ink : COLOR.muted });
+    const words = row ? (off ? "Switched off" : coverage) : "No data in this period";
+    text(doc, fit(doc, words, colW - 36, 7), x + colW, top + 4, { fontSize: 7, color: row && !off ? COLOR.body : COLOR.muted, italic: !row || off, align: "right" });
+    rule(doc, top + 5.4, x, colW);
+  });
+  y += 4 * 6.2;
+  warn("page 1", y);
+
+  // ================= Page 2: the evidence =================
+  doc.addPage();
+  topStrip();
+  text(doc, fit(doc, waterbodyName, CONTENT_W - 50, 9, "bold"), M, 12, { fontSize: 9, bold: true, color: COLOR.ink });
+  text(doc, "Catchment Health · Evidence", PAGE.width - M, 12, { fontSize: 8, color: COLOR.muted, align: "right" });
+  rule(doc, 15);
+
+  y = 22;
+  sectionHeading(doc, "Recreation, biodiversity and recovery", y);
   y += 6;
-  for (const row of themeSummaries(ranks)) {
+  const cardW = (CONTENT_W - 8) / 3;
+  const cardX = (i) => M + i * (cardW + 4);
+  const inner = cardW - 5;
+
+  // Visible pollution.
+  {
+    const x = cardX(0);
+    card(doc, x, y, cardW, 50, "Visible pollution", bandForRank(ranks.visiblePollution));
+    const surveys = scorecard.visiblePollutionSurveys ?? 0;
+    if (!surveys) {
+      noData(doc, "No pollution surveys in this period", x + 2.5, y + 11);
+    } else {
+      const withSigns = scorecard.visiblePollutionWithSigns ?? 0;
+      text(doc, fit(doc, `${withSigns} of ${surveys.toLocaleString("en-GB")} surveys (${percent(withSigns / surveys)}) show a sign`, inner, 7.2), x + 2.5, y + 10.5, { fontSize: 7.2, bold: true, color: COLOR.ink });
+      text(doc, `${plural(scorecard.visiblePollutionSiteCount ?? 0, "site")}`, x + 2.5, y + 14.5, { fontSize: 6.8, color: COLOR.muted });
+    }
+    const signs = scorecard.visiblePollutionSigns ?? [];
+    for (let r = 0; r < SIGN_ROWS; r++) {
+      const sign = signs[r];
+      barRow(doc, x + 2.5, y + 21 + r * 5.2, inner, sign
+        ? { label: sign.label, fraction: sign.surveys / surveys, value: String(sign.surveys) }
+        : { label: surveys ? (r === 0 ? "No signs seen" : "") : "", fraction: null });
+    }
+    if (signs.length > SIGN_ROWS) text(doc, `and ${signs.length - SIGN_ROWS} more`, x + 2.5, y + 21 + SIGN_ROWS * 5.2, { fontSize: 6.5, italic: true, color: COLOR.muted });
+    if (!scorecard.visiblePollutionRated) noData(doc, "Not enough data to rate", x + 2.5, y + 47);
+  }
+
+  // Wildlife.
+  {
+    const x = cardX(1);
+    card(doc, x, y, cardW, 50, "Wildlife", bandForRank(ranks.wildlife));
+    const surveys = scorecard.wildlifeSurveys ?? 0;
+    if (!surveys) {
+      noData(doc, "No wildlife surveys in this period", x + 2.5, y + 11);
+    } else {
+      text(doc, fit(doc, `Score ${Number((100 * (scorecard.wildlifeScore ?? 0)).toFixed(1))}% from ${plural(surveys, "survey")}`, inner, 7.2), x + 2.5, y + 10.5, { fontSize: 7.2, bold: true, color: COLOR.ink });
+      text(doc, `${plural(scorecard.wildlifeSiteCount ?? 0, "site")}`, x + 2.5, y + 14.5, { fontSize: 6.8, color: COLOR.muted });
+    }
+    const species = scorecard.wildlifeSpeciesSeen ?? SCORECARD.wildlifeSpecies.map((label) => ({ label, surveys: 0 }));
+    const speciesRows = [...species].slice(0, 7);
+    for (let r = 0; r < 7; r++) {
+      const item = speciesRows[r];
+      barRow(doc, x + 2.5, y + 20 + r * 3.9, inner, item
+        ? { label: item.label.replace("Dragonflies and damselflies", "Dragonflies"), fraction: surveys ? item.surveys / surveys : 0, value: String(item.surveys) }
+        : { label: "", fraction: null });
+    }
+    if (!scorecard.wildlifeRated) noData(doc, "Not enough data to rate", x + 2.5, y + 47);
+  }
+
+  // Invertebrates (Riverfly).
+  {
+    const x = cardX(2);
+    card(doc, x, y, cardW, 50, "Invertebrates", bandForRank(ranks.invertebrates));
+    const samples = scorecard.invertebrateSurveyCount ?? 0;
+    if (!samples) {
+      noData(doc, "No Riverfly samples in this period", x + 2.5, y + 11);
+    } else {
+      const breaches = scorecard.invertebrateBreachCount ?? 0;
+      text(doc, fit(doc, `${plural(breaches, "confirmed breach", "confirmed breaches")} in ${plural(samples, "sample")}`, inner, 7.2), x + 2.5, y + 10.5, { fontSize: 7.2, bold: true, color: COLOR.ink });
+      text(doc, `${plural(scorecard.invertebrateSiteCount ?? 0, "riverfly site")}`, x + 2.5, y + 14.5, { fontSize: 6.8, color: COLOR.muted });
+      // Clean samples against breaches, as one bar.
+      rect(doc, x + 2.5, y + 22, inner, 4, COLOR.rule);
+      if (breaches) rect(doc, x + 2.5, y + 22, Math.max(inner * (breaches / samples), 0.6), 4, COLOR.seen);
+      text(doc, `${percent(breaches / samples)} of samples breached`, x + 2.5, y + 31, { fontSize: 6.8, color: COLOR.body });
+    }
+    if (!samples) {
+      rect(doc, x + 2.5, y + 22, inner, 4, COLOR.rule);
+    }
+    if (!(bandForRank(ranks.invertebrates))) noData(doc, "Not enough data to rate", x + 2.5, y + 47);
+  }
+
+  y += 54;
+
+  // Invasives: the six species always listed, ticked if spotted.
+  {
+    const x = cardX(0);
+    card(doc, x, y, cardW, 44, "Invasives", bandForRank(ranks.invasives));
+    const seen = new Set((scorecard.invasiveSeenBy ?? []).map((item) => item.label));
+    const surveys = scorecard.invasiveSurveyCount ?? 0;
+    if (!surveys) noData(doc, "No surveys in this period", x + 2.5, y + 11);
+    else text(doc, `${seen.size} of ${INVASIVE_PLANT_FIELDS.length} species spotted`, x + 2.5, y + 10.5, { fontSize: 7.2, bold: true, color: COLOR.ink });
+    INVASIVE_PLANT_FIELDS.forEach((field, i) => {
+      const top = y + 16 + i * 3.5;
+      const spotted = seen.has(field.label);
+      doc.setFillColor(...rgb(spotted ? COLOR.seen : "#ffffff"));
+      doc.setDrawColor(...rgb(spotted ? COLOR.seen : COLOR.noData));
+      doc.setLineWidth(0.25);
+      doc.circle(x + 3.6, top - 0.9, 1, "FD");
+      text(doc, field.label, x + 6.5, top, { fontSize: 7, color: spotted ? COLOR.ink : COLOR.muted, bold: spotted });
+    });
+    if (!scorecard.invasivesRated) noData(doc, "Not enough data to rate", x + 2.5, y + 41.5);
+  }
+
+  // Action: delivered interventions.
+  {
+    const x = cardX(1);
+    card(doc, x, y, cardW, 44, "Action (recovery)", bandForRank(ranks.action));
+    const delivered = scorecard.actionDeliveredCount ?? 0;
+    text(doc, String(delivered), x + 2.5, y + 21, { fontSize: 20, bold: true, color: delivered ? COLOR.ink : COLOR.noData });
+    text(doc, "delivered Nature-Based", x + 2.5, y + 27, { fontSize: 7, color: COLOR.body });
+    text(doc, "Solutions interventions", x + 2.5, y + 30.6, { fontSize: 7, color: COLOR.body });
+    if (!bandForRank(ranks.action)) noData(doc, "Not rated: none delivered", x + 2.5, y + 41.5);
+  }
+
+  // Measures not yet assessed, kept as a reserved slot.
+  {
+    const x = cardX(2);
+    card(doc, x, y, cardW, 44, "Not yet assessed", null, { dashed: true });
+    ["E. coli", "Barriers"].forEach((label, i) => text(doc, label, x + 2.5, y + 12 + i * 4.5, { fontSize: 7.5, color: COLOR.muted }));
+    noData(doc, "Reserved for future measures", x + 2.5, y + 41.5);
+  }
+  y += 48;
+
+  // ---- Habitat ----
+  sectionHeading(doc, "Habitat and naturalness", y, bandForRank(themeRank(CATCHMENT_HEALTH_SPOKES.find((spoke) => spoke.key === "habitat"), ranks)));
+  y += 6;
+  const habitat = scorecard.habitat;
+  card(doc, M, y, CONTENT_W, 36, "Habitat", bandForRank(ranks.habitatCondition));
+  if (!habitat?.subreaches.length) {
+    // Kept inside the left column, beside the index slots.
+    const words = habitat ? "No MoRPh habitat surveys in the five years to the period's end" : "The Modular River Survey could not be loaded";
+    wrap(doc, words, 46, 7, "italic").slice(0, 4).forEach((line, i) => noData(doc, line, M + 2.5, y + 12 + i * 3.4));
+  } else {
+    text(doc, `${habitat.score == null ? "-" : habitat.score.toFixed(1)}`, M + 2.5, y + 20, { fontSize: 20, bold: true, color: COLOR.ink });
+    text(doc, "out of 10", M + 22, y + 20, { fontSize: 7, color: COLOR.muted });
+    text(doc, `${plural(habitat.subreaches.length, "subreach", "subreaches")}`, M + 2.5, y + 26, { fontSize: 7, color: COLOR.body });
+    text(doc, `${plural(habitat.modules.length, "module")}, latest surveys`, M + 2.5, y + 29.6, { fontSize: 7, color: COLOR.body });
+  }
+  // The indices: what is in the score, then the pressures beside it.
+  const bars = (list, x, title) => {
+    text(doc, title, x, y + 10.5, { fontSize: 6.8, bold: true, color: COLOR.muted });
+    for (let r = 0; r < 4; r++) {
+      const part = list[r];
+      barRow(doc, x, y + 15 + r * 4.6, 56, part
+        ? { label: part.label, fraction: part.value == null ? 0 : part.value / 10, value: part.value == null ? "-" : part.value.toFixed(1) }
+        : { label: "", fraction: null }, 0.62);
+    }
+  };
+  bars(habitat?.components ?? [], M + 52, "In the score (higher is better)");
+  bars(habitat?.pressures ?? [], M + 113, "Pressures, not scored (lower is better)");
+  y += 40;
+
+  // Subreaches: a fixed six rows.
+  const columns = { name: 0, date: 88, type: 110, modules: 142, score: 160 };
+  [["Subreach", columns.name], ["Surveyed", columns.date], ["Type", columns.type], ["Modules", columns.modules], ["Score", columns.score]]
+    .forEach(([label, x]) => text(doc, label, M + x, y, { fontSize: 7, bold: true, color: COLOR.muted }));
+  y += 1.5;
+  const subreaches = habitatSubreachRows(scorecard);
+  for (let r = 0; r < SUBREACH_ROWS; r++) {
     rule(doc, y);
-    const baseline = y + 4.8;
-    text(doc, row.spoke.label, col.theme, baseline, { fontSize: 9, bold: row.wired, color: row.wired ? COLOR.ink : COLOR.muted });
-    if (row.wired) ratingMark(doc, row.band, col.rating, baseline, { fontSize: 8.5 });
-    else text(doc, "—", col.rating, baseline, { fontSize: 9, color: COLOR.muted });
-    text(doc, row.basis, col.basis, baseline, { fontSize: 8.5, color: row.wired ? COLOR.body : COLOR.muted });
-    y += 7;
+    const row = subreaches[r];
+    const baseline = y + 3.8;
+    if (row) {
+      text(doc, fit(doc, row.name, 84, 7.5), M + columns.name, baseline, { fontSize: 7.5, color: COLOR.ink });
+      text(doc, row.date, M + columns.date, baseline, { fontSize: 7.5, color: COLOR.body });
+      text(doc, fit(doc, row.surveyType, 30, 7.5), M + columns.type, baseline, { fontSize: 7.5, color: COLOR.body });
+      text(doc, row.modules, M + columns.modules, baseline, { fontSize: 7.5, color: COLOR.body });
+      text(doc, row.score, M + columns.score, baseline, { fontSize: 7.5, color: COLOR.body });
+    } else if (r === 0) {
+      noData(doc, "No subreaches surveyed", M, baseline);
+    }
+    y += 5;
   }
   rule(doc, y);
-  y += 10;
+  const more = subreaches.length - SUBREACH_ROWS;
+  text(doc, more > 0 ? `and ${more} more subreach${more === 1 ? "" : "es"}` : "The latest survey at each place; an earlier module is left out where the same place was surveyed again.", M, y + 4, { fontSize: 6.8, italic: true, color: COLOR.muted });
+  y += 11;
 
-  // Data sources.
-  eyebrow(doc, "Data sources", M, y);
+  // ---- Notes and method ----
+  sectionHeading(doc, "Notes and method", y);
+  y += 6;
+  const notes = [
+    "Each measure is rated High, Good, Moderate, Poor or Bad against thresholds set in the scorecard settings; a measure without enough data is left unrated and does not count towards its theme.",
+    "A survey can show more than one pollution sign or record more than one species, so the rows can add up to more than the surveys.",
+    "Habitat is not limited to the period: the latest MoRPh survey at each place in the last five years counts.",
+    "The wheel's centre is the average of the wired themes; themes not yet assessed are greyed on page 1.",
+  ];
+  notes.forEach((note) => {
+    const lines = wrap(doc, note, CONTENT_W - 4, 7);
+    text(doc, "•", M, y, { fontSize: 7, color: COLOR.muted });
+    text(doc, lines, M + 3, y, { fontSize: 7, color: COLOR.body });
+    y += lines.length * lineH(7) * 1.15 + 1.2;
+  });
   y += 3;
-  rule(doc, y);
-  for (const source of dataSourceRows(scorecard)) {
-    const baseline = y + 4.8;
-    text(doc, source.name, col.theme, baseline, { fontSize: 9, bold: true, color: COLOR.ink });
-    text(doc, source.coverage || "—", col.basis, baseline, { fontSize: 8.5, color: COLOR.body });
-    y += 7;
-    rule(doc, y);
-  }
 
-  // ================= Page 2+: detail =================
-  const runningHeader = () => {
-    rect(doc, 0, 0, PAGE.width, 2, overall?.color ?? COLOR.noData);
-    text(doc, waterbodyName, M, 12, { fontSize: 9, bold: true, color: COLOR.ink });
-    text(doc, "Catchment Health · Detail", PAGE.width - M, 12, { fontSize: 8, color: COLOR.muted, align: "right" });
-    rule(doc, 15);
-  };
-  const newPage = () => {
-    doc.addPage();
-    runningHeader();
-    y = 24;
-  };
-  const ensure = (height) => {
-    if (y + height > CONTENT_BOTTOM) newPage();
-  };
-  newPage();
+  // ---- Themes not yet assessed: a reserved strip ----
+  const pending = CATCHMENT_HEALTH_SPOKES.filter((spoke) => !spoke.wired).map((spoke) => spoke.label);
+  doc.setDrawColor(...rgb(COLOR.noData));
+  doc.setLineWidth(0.25);
+  doc.setLineDashPattern([1.2, 1.2], 0);
+  doc.roundedRect(M, y, CONTENT_W, 12, 1, 1, "S");
+  doc.setLineDashPattern([], 0);
+  text(doc, "Themes not yet assessed", M + 2.5, y + 4.8, { fontSize: 7.5, bold: true, color: COLOR.muted });
+  text(doc, fit(doc, pending.join(" · "), CONTENT_W - 5, 7.5), M + 2.5, y + 9.2, { fontSize: 7.5, color: COLOR.muted });
+  y += 12;
+  warn("page 2", y);
 
-  // Theme heading: name left, rating right, rule under. 12mm tall.
-  const themeHeading = (spoke, band) => {
-    text(doc, spoke.label, M, y + 5, { fontSize: 13, bold: true, color: COLOR.ink });
-    ratingMark(doc, band, PAGE.width - M, y + 5, { fontSize: 9.5, align: "right" });
-    y += 8;
-    rule(doc, y);
-    y += 5;
-  };
-
-  // Nutrients & Sediment: a two-column grid of charts, each labelled with
-  // its measure, rating and figure.
-  const chartGrid = (spoke) => {
-    const gap = 8;
-    const cellW = (CONTENT_W - gap) / 2;
-    const chartH = cellW * CHART_ASPECT;
-    const intro = `Bars are ${CADENCE[granularity]} averages across every monitoring site in the waterbody, from every data source listed, over the threshold bands. A grey dash on the baseline marks a month with no readings.`;
-    const introLines = wrap(doc, intro, CONTENT_W, 8);
-    const cells = spoke.subs.map((sub) => {
-      const metric = getMetric(sub.key);
-      const caption = wrap(doc, subDetailLines(sub.key, scorecard)[0], cellW, 7.5);
-      return { sub, metric, band: bandForRank(ranks[sub.key]), caption };
-    });
-    // Nothing to chart at all: one line rather than a grid of empty boxes.
-    if (spoke.subs.every((s) => !(scorecard[`${s.key}Series`] ?? []).length)) {
-      ensure(13 + 10);
-      themeHeading(spoke, bandForRank(themeRank(spoke, ranks)));
-      text(doc, "No readings in this waterbody for the date range.", M, y, { fontSize: 8.5, color: COLOR.muted });
-      y += 12;
-      return;
-    }
-
-    const rows = [];
-    for (let i = 0; i < cells.length; i += 2) rows.push(cells.slice(i, i + 2));
-    // Label, chart, caption - the gap after a row isn't needed at a page end.
-    const rowGap = 5;
-    const rowHeight = (row) => 6 + chartH + 2 + Math.max(...row.map((c) => c.caption.length)) * lineH(7.5) + 1;
-
-    ensure(13 + introLines.length * lineH(8) + 4 + rowHeight(rows[0]));
-    themeHeading(spoke, bandForRank(themeRank(spoke, ranks)));
-    text(doc, introLines, M, y, { fontSize: 8, color: COLOR.muted });
-    y += introLines.length * lineH(8) + 4;
-
-    for (const row of rows) {
-      const height = rowHeight(row);
-      ensure(height);
-      row.forEach((cell, i) => {
-        const x = M + i * (cellW + gap);
-        text(doc, `${cell.sub.label}${cell.metric ? ` (${cell.metric.unit})` : ""}`, x, y + 3.5, { fontSize: 8.5, bold: true, color: COLOR.ink });
-        ratingMark(doc, cell.band, x + cellW, y + 3.5, { fontSize: 8, align: "right" });
-        const image = cell.metric && barChartImage(cell.metric, scorecard[`${cell.sub.key}Series`] ?? [], granularity,
-          equipmentRanges[cell.sub.key]?.max, 600, Math.round(600 * CHART_ASPECT), { showTitle: false });
-        if (image) {
-          doc.addImage(image, "PNG", x, y + 6, cellW, chartH);
-        } else {
-          rect(doc, x, y + 6, cellW, chartH, COLOR.panel, { radius: 1 });
-          text(doc, "No readings in this date range", x + cellW / 2, y + 6 + chartH / 2, { fontSize: 8, color: COLOR.muted, align: "center" });
-        }
-        text(doc, cell.caption, x, y + 6 + chartH + 4, { fontSize: 7.5, color: COLOR.body });
-      });
-      y += height + rowGap;
-    }
-    y += 4;
-  };
-
-  // Other themes: measure / rating / evidence table.
-  const measureTable = (spoke) => {
-    const col = { measure: M, rating: M + 40, evidence: M + 74 };
-    const evidenceW = PAGE.width - M - col.evidence;
-    const rows = spoke.subs.map((sub) => {
-      // Visible pollution's signs get their own table, below.
-      const [first, ...rest] = subDetailLines(sub.key, scorecard).filter((line) => !isSignsLine(line));
-      return {
-        sub,
-        band: bandForRank(ranks[sub.key]),
-        evidence: wrap(doc, first, evidenceW, 8.5),
-        caveat: rest.length ? wrap(doc, rest.join(" "), evidenceW, 7.5, "italic") : [],
-      };
-    });
-    const rowHeight = (r) => 3 + r.evidence.length * lineH(8.5) * 1.15 + (r.caveat.length ? 1.5 + r.caveat.length * lineH(7.5) * 1.15 : 0) + 3;
-
-    ensure(13 + 6 + rowHeight(rows[0]));
-    themeHeading(spoke, bandForRank(themeRank(spoke, ranks)));
-    text(doc, "Measure", col.measure, y, { fontSize: 7.5, bold: true, color: COLOR.muted });
-    text(doc, "Rating", col.rating, y, { fontSize: 7.5, bold: true, color: COLOR.muted });
-    text(doc, "Evidence", col.evidence, y, { fontSize: 7.5, bold: true, color: COLOR.muted });
-    y += 2.5;
-    for (const r of rows) {
-      const height = rowHeight(r);
-      ensure(height);
-      rule(doc, y);
-      const baseline = y + 3 + lineH(8.5);
-      text(doc, r.sub.label, col.measure, baseline, { fontSize: 9, bold: true, color: COLOR.ink });
-      ratingMark(doc, r.band, col.rating, baseline, { fontSize: 8.5 });
-      text(doc, r.evidence, col.evidence, baseline, { fontSize: 8.5, color: COLOR.body });
-      if (r.caveat.length) {
-        text(doc, r.caveat, col.evidence, baseline + r.evidence.length * lineH(8.5) * 1.15 + 1.5, { fontSize: 7.5, italic: true, color: COLOR.muted });
-      }
-      y += height;
-    }
-    rule(doc, y);
-    y += 9;
-    spoke.subs.filter((sub) => BREAKDOWNS[sub.key]).forEach((sub) => signsTable(sub.key));
-    if (spoke.subs.some((sub) => sub.key === "habitatCondition")) habitatTables();
-  };
-
-  // A plain table: a title, column headings at the given x offsets, rows
-  // of text (wrapped to their column), and an optional note.
-  const plainTable = (title, columns, rows, note) => {
-    const widths = columns.map((column, i) => (columns[i + 1]?.x ?? CONTENT_W) - column.x - 2);
-    const wrapped = rows.map((row) => row.map((value, i) => wrap(doc, value, widths[i], 8.5)));
-    const heights = wrapped.map((row) => 2.2 + Math.max(...row.map((lines) => lines.length)) * lineH(8.5) * 1.15 + 1.6);
-    ensure(10 + heights[0] + 8);
-    text(doc, title, M, y, { fontSize: 9.5, bold: true, color: COLOR.ink });
-    y += 5;
-    columns.forEach((column) => text(doc, column.label, M + column.x, y, { fontSize: 7.5, bold: true, color: COLOR.muted }));
-    y += 2;
-    wrapped.forEach((row, r) => {
-      ensure(heights[r]);
-      rule(doc, y);
-      const baseline = y + 4.2;
-      row.forEach((lines, i) => text(doc, lines, M + columns[i].x, baseline, { fontSize: 8.5, color: i === 0 ? COLOR.ink : COLOR.body }));
-      y += heights[r];
-    });
-    rule(doc, y);
-    y += 4;
-    if (note) {
-      const lines = wrap(doc, note, CONTENT_W, 7.5, "italic");
-      ensure(lines.length * lineH(7.5) + 4);
-      text(doc, lines, M, y, { fontSize: 7.5, italic: true, color: COLOR.muted });
-      y += lines.length * lineH(7.5);
-    }
-    y += 6;
-  };
-
-  // The Habitat measure: what its score is made of, then each subreach.
-  const habitatTables = () => {
-    const parts = habitatPartRows(scorecard);
-    if (!parts.length) return;
-    plainTable("Habitat: MoRPh indices",
-      [{ label: "Index", x: 0 }, { label: "Average", x: 74 }, { label: "Used as", x: 96 }],
-      parts.map((part) => [part.label, part.value, part.kind]),
-      "Waterbody averages of the subreaches' means. Each index runs from 0 upwards (most to about 10). The pressures are shown for context and don't change the rating.");
-    plainTable("Habitat: subreaches surveyed",
-      [{ label: "Subreach", x: 0 }, { label: "Surveyed", x: 84 }, { label: "Type", x: 106 }, { label: "Modules", x: 138 }, { label: "Score", x: 158 }],
-      habitatSubreachRows(scorecard).map((row) => [row.name, row.date, row.surveyType, row.modules, row.score]),
-      "The latest survey at each place. An earlier module is left out where the same place was surveyed again later.");
-  };
-
-  // A survey-counted measure's breakdown: label, surveys, share.
-  const signsTable = (subKey) => {
-    const signs = breakdownRows(scorecard, subKey);
-    if (!signs.length) return;
-    const { title, column } = BREAKDOWNS[subKey];
-    const total = subKey === "wildlife" ? scorecard.wildlifeSurveys : scorecard.visiblePollutionSurveys;
-    const col = { sign: M, surveys: M + 74, share: M + 104 };
-    const rowH = 6;
-    ensure(10 + rowH * (signs.length + 1) + 8);
-    text(doc, title, M, y, { fontSize: 9.5, bold: true, color: COLOR.ink });
-    y += 5;
-    text(doc, column, col.sign, y, { fontSize: 7.5, bold: true, color: COLOR.muted });
-    text(doc, "Surveys", col.surveys, y, { fontSize: 7.5, bold: true, color: COLOR.muted });
-    text(doc, "Share of surveys", col.share, y, { fontSize: 7.5, bold: true, color: COLOR.muted });
-    y += 2;
-    for (const sign of signs) {
-      rule(doc, y);
-      const baseline = y + 4.2;
-      text(doc, sign.label, col.sign, baseline, { fontSize: 8.5, color: sign.surveys ? COLOR.ink : COLOR.muted });
-      text(doc, sign.surveys.toLocaleString("en-GB"), col.surveys, baseline, { fontSize: 8.5, color: COLOR.body });
-      text(doc, sign.share, col.share, baseline, { fontSize: 8.5, color: COLOR.body });
-      y += rowH;
-    }
-    rule(doc, y);
-    y += 4;
-    text(doc, `Out of ${total.toLocaleString("en-GB")} surveys. A survey can ${subKey === "wildlife" ? "record more than one species" : "show more than one sign"}.`, M, y, { fontSize: 7.5, italic: true, color: COLOR.muted });
-    y += 9;
-  };
-
-  for (const spoke of CATCHMENT_HEALTH_SPOKES.filter((s) => s.wired)) {
-    const charted = spoke.subs.length > 1 && spoke.subs.every((s) => getMetric(s.key));
-    if (charted) chartGrid(spoke);
-    else measureTable(spoke);
-  }
-
-  // (Themes not wired up yet are listed as "Not yet assessed" on page 1.)
-
-  // Footer on every page, once the page count is known.
+  // Footer on both pages.
   const total = doc.internal.getNumberOfPages();
+  if (total !== 2) console.warn(`Scorecard PDF: expected 2 pages, made ${total}.`);
   const scale = RATING_BANDS.map((b) => b.label).join(" · ");
   for (let p = 1; p <= total; p++) {
     doc.setPage(p);

@@ -16,11 +16,11 @@
   },
   "rounds": [2016, 2019, 2022, 2025],
   "statuses": [
-    { "value": "High", "rank": 5, "colour": { "dark": "#3987e5", "light": "#2a78d6" } },
-    { "value": "Good", "rank": 4, "colour": { "dark": "#2e9e4f", "light": "#2a8f47" } },
-    { "value": "Moderate", "rank": 3, "colour": { "dark": "#e6c000", "light": "#d9b200" } },
-    { "value": "Poor", "rank": 2, "colour": { "dark": "#f08c00", "light": "#e67e00" } },
-    { "value": "Bad", "rank": 1, "colour": { "dark": "#e05252", "light": "#d63129" } }
+    { "value": "High", "rank": 5, "colour": { "dark": "#0072b0", "light": "#0072b0" } },
+    { "value": "Good", "rank": 4, "colour": { "dark": "#56d5e8", "light": "#56d5e8" } },
+    { "value": "Moderate", "rank": 3, "colour": { "dark": "#e6b800", "light": "#e6b800" } },
+    { "value": "Poor", "rank": 2, "colour": { "dark": "#f08c00", "light": "#f08c00" } },
+    { "value": "Bad", "rank": 1, "colour": { "dark": "#d63129", "light": "#d63129" } }
   ],
   "items": [
     { "id": "Ammonia_Phys_Chem", "label": "Ammonia", "group": "Physico-chemical" },

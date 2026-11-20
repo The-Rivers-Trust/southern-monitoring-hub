@@ -2,9 +2,10 @@
 // RIVER NETWORK
 // The Open River Network reference layer, plus the "River flow
 // direction" overlay - copied from the AQuA and NRS dashboards (keep the
-// copies in step). Both start off and are linked: switching flow on
-// switches the network on, switching the network off switches flow off.
-// The map's Layers panel switches them (js/map/layers-panel.js).
+// copies in step). The Monitoring and Classification maps switch both on
+// (addRiversAndFlow); they draw by zoom level, with no panel. The two are
+// linked: flow on switches the network on, network off switches flow off.
+// The Map Explorer lists them in its own layer list (map/web-map-layers.js).
 //
 // Flow direction is an animated overlay of light trails moving along
 // each river segment from its first digitised vertex to its last (the
@@ -15,46 +16,49 @@
 // at MAX_SEGMENTS.
 // =====================================================================
 
-import { RIVER_NETWORK } from "../config.js";
+import { DARK_BASEMAPS, RIVER_NETWORK } from "../config.js";
 
 const FLOW_EXTRA_WIDTH = 3; // trail is a bit wider than the river line
-const FLOW_COLOR = [255, 255, 255, 255];
+const FLOW_COLOR_ON_DARK = [255, 255, 255, 255]; // light trails on a dark basemap...
+const FLOW_COLOR_ON_LIGHT = [20, 30, 45, 255]; // ...dark ones on a light basemap, where white would vanish
 const TRAIL_SPEED = 120; // map units (metres) per second
 const TRAIL_LENGTH = 250;
 const TRAIL_CYCLE = 900;
 const MAX_SEGMENTS = 8000;
 
-// Adds both layers at `index` in the map's layers (network, then flow
-// above it). Resolves to { network, flow }; flow is null if the WebGL
-// overlay couldn't be created.
-export async function addRiverNetwork(mapEl, index) {
-  const [FeatureLayer, GraphicsLayer, BaseLayerViewGL2D, reactiveUtils] = await $arcgis.import([
-    "@arcgis/core/layers/FeatureLayer.js",
+// The id of the basemap a map is showing.
+const basemapId = (mapEl) => mapEl.map?.basemap?.style?.id ?? mapEl.map?.basemap?.id;
+
+// The trail colour for the basemap showing.
+export const flowColorFor = (mapEl) => (DARK_BASEMAPS.includes(basemapId(mapEl)) ? FLOW_COLOR_ON_DARK : FLOW_COLOR_ON_LIGHT);
+
+// The network's soft look, as on the NRS dashboard: a see-through blue
+// with fine lines, widest for the biggest rivers.
+export function riverRenderer() {
+  return {
+    type: "simple",
+    symbol: { type: "simple-line", color: RIVER_NETWORK.color, cap: "round", join: "round" },
+    visualVariables: [{ type: "size", field: "Strahler", stops: RIVER_NETWORK.widthByStrahler }],
+  };
+}
+
+// One animated trail for a river section: paths and spatialReference
+// from its geometry, strahler its stream order.
+export function flowGraphic(mapEl, { paths, spatialReference }, strahler) {
+  return {
+    attributes: { color: flowColorFor(mapEl), halfWidth: flowHalfWidth(strahler) },
+    geometry: { type: "polyline", paths, spatialReference },
+  };
+}
+
+// An empty animated-flow layer. Null if the WebGL overlay couldn't be
+// created, so the rest of the map is unaffected.
+export async function createFlowLayer(options) {
+  const [GraphicsLayer, BaseLayerViewGL2D, reactiveUtils] = await $arcgis.import([
     "@arcgis/core/layers/GraphicsLayer.js",
     "@arcgis/core/views/2d/layers/BaseLayerViewGL2D.js",
     "@arcgis/core/core/reactiveUtils.js",
   ]);
-
-  const network = new FeatureLayer({
-    url: RIVER_NETWORK.url,
-    title: RIVER_NETWORK.title,
-    outFields: ["Strahler"],
-    visible: false,
-    popupEnabled: false,
-    minScale: RIVER_NETWORK.minScale,
-    renderer: {
-      type: "simple",
-      symbol: { type: "simple-line", color: RIVER_NETWORK.color, cap: "round", join: "round" },
-      visualVariables: [{ type: "size", field: "Strahler", stops: RIVER_NETWORK.widthByStrahler }],
-    },
-    // A soft shadow lifts the lines off either basemap.
-    effect: "drop-shadow(0px, 0px, 3px, #000000)",
-  });
-  mapEl.map.add(network, index);
-
-  // The flow overlay is added separately and guarded, so if WebGL or the
-  // layer view fails for any reason the rest of the map is unaffected.
-  let flow;
   try {
     const FlowLayerView = createFlowLayerView(BaseLayerViewGL2D, reactiveUtils);
     const FlowLayer = GraphicsLayer.createSubclass({
@@ -63,16 +67,54 @@ export async function addRiverNetwork(mapEl, index) {
         return null;
       },
     });
-    flow = new FlowLayer({
-      title: RIVER_NETWORK.flowTitle,
-      visible: false,
-      minScale: RIVER_NETWORK.flowMinScale,
-    });
-    mapEl.map.add(flow, index + 1);
+    return new FlowLayer(options);
   } catch (error) {
     console.warn("Southern Monitoring Hub: river flow direction unavailable:", error);
-    return { network, flow: null };
+    return null;
   }
+}
+
+// The network and its flow direction, both on and with nothing to switch:
+// the rivers draw once zoomed in to RIVER_NETWORK.minScale and the flow
+// trails once closer, to RIVER_NETWORK.flowMinScale. Added at `index`.
+export async function addRiversAndFlow(mapEl, index) {
+  const { network, flow } = await addRiverNetwork(mapEl, index);
+  network.visible = true;
+  if (flow) flow.visible = true;
+  return { network, flow };
+}
+
+// Adds both layers at `index` in the map's layers (network, then flow
+// above it). Resolves to { network, flow }; flow is null if the WebGL
+// overlay couldn't be created.
+export async function addRiverNetwork(mapEl, index) {
+  const [FeatureLayer] = await $arcgis.import(["@arcgis/core/layers/FeatureLayer.js"]);
+  const network = new FeatureLayer({
+    url: RIVER_NETWORK.url,
+    title: RIVER_NETWORK.title,
+    outFields: ["Strahler"],
+    visible: false,
+    popupEnabled: false,
+    minScale: RIVER_NETWORK.minScale,
+    renderer: riverRenderer(),
+  });
+  mapEl.map.add(network, index);
+  return { network, flow: await attachFlow(mapEl, network, index + 1) };
+}
+
+// Adds the "River flow direction" overlay for a network layer at `index`,
+// linked to it: switching flow on switches the network on, switching the
+// network off switches flow off. Null if the overlay couldn't be created.
+// container is the map, or the group layer the network sits in.
+export async function attachFlow(mapEl, network, index, container = mapEl.map) {
+  const [reactiveUtils] = await $arcgis.import(["@arcgis/core/core/reactiveUtils.js"]);
+  const flow = await createFlowLayer({
+    title: RIVER_NETWORK.flowTitle,
+    visible: false,
+    minScale: RIVER_NETWORK.flowMinScale,
+  });
+  if (!flow) return null;
+  container.add(flow, index);
 
   // Link the two toggles.
   reactiveUtils.watch(() => flow.visible, (visible) => {
@@ -82,6 +124,9 @@ export async function addRiverNetwork(mapEl, index) {
   reactiveUtils.watch(() => network.visible, (visible) => {
     if (!visible && flow.visible) flow.visible = false;
   });
+
+  // The trails are redrawn in the right colour when the basemap changes.
+  reactiveUtils.watch(() => basemapId(mapEl), () => { if (flow.visible) refresh(); });
 
   // Re-query the segments in view whenever the map settles.
   let requestToken = 0;
@@ -95,7 +140,7 @@ export async function addRiverNetwork(mapEl, index) {
     });
   });
 
-  return { network, flow };
+  return flow;
 
   // The segments in view, taken from the network layer's own already
   // loaded tiles (milliseconds) rather than asked of the service again
@@ -146,10 +191,7 @@ export async function addRiverNetwork(mapEl, index) {
     const features = (await segmentsInView()) ?? (await segmentsFromService(token));
     if (token !== requestToken || !features) return; // superseded by a newer refresh
     flow.graphics.removeAll();
-    flow.graphics.addMany(features.map((f) => ({
-      attributes: { color: FLOW_COLOR, halfWidth: flowHalfWidth(f.attributes.Strahler) },
-      geometry: { type: "polyline", paths: f.geometry.paths, spatialReference: f.geometry.spatialReference },
-    })));
+    flow.graphics.addMany(features.map((f) => flowGraphic(mapEl, f.geometry, f.attributes.Strahler)));
   }
 }
 

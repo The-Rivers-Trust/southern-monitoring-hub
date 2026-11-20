@@ -16,6 +16,7 @@ const TOOLS = [
   { panel: ".layersPanel", action: ".layersAction" },
   { panel: ".basemapPanel", action: ".basemapAction" },
   { panel: ".legendPanel", action: ".legendAction" },
+  { panel: ".datasetPanel", action: ".datasetAction" },
 ];
 
 export function setupToolPanels(mapEl) {

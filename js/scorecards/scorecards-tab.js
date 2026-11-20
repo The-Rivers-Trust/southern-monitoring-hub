@@ -20,6 +20,7 @@
 import { NRS, MAP, SCORECARD_SOURCES, SCORECARD_COLORS, HUB_SOURCE_SYMBOLS, RIVER_NETWORK, STORM_OVERFLOW_GLYPH } from "./config.js";
 import { getMetric, useCatalog } from "./metrics.js";
 import { getTheme, onThemeChange } from "../theme.js";
+import { createFlowLayer, flowGraphic } from "../map/river-network.js";
 import { dateRangeDescription, initDateRange, onDateRangeChange } from "./date-range.js";
 import { fetchEquipment, getLayer } from "./nrs-service.js";
 import { computeScorecard, RIVERFLY_ASSESSED, riverflyWhere } from "./waterbody-data.js";
@@ -27,6 +28,7 @@ import { bandForRank, catchmentHealthRanks, catchmentHealthOverallRank } from ".
 import { BREAKDOWNS, breakdownRows, habitatPartRows, habitatSubreachRows, isSignsLine, subDetailLines, subSourceLines } from "./scorecard-text.js";
 import { morphFor } from "./morph.js";
 import { renderCatchmentHealthWheel, renderRatingLegend } from "./charts/wheels.js";
+import { MAP_ASPECT } from "./pdf-layout.js";
 import { renderBarChart, bucketGranularity } from "./charts/bar-chart.js";
 import { loadJsPdf, safeFileName } from "./pdf-common.js";
 import { buildCatchmentHealthPdf } from "./pdf-catchment-health.js";
@@ -73,7 +75,7 @@ export async function initScorecardsTab(els, { catalog, area, waterbodies, partn
   state.partnership = partnership;
   useCatalog(catalog);
   // The hub's readings, for the datasets data/scorecard.json
-  // lists. Shared with the Monitoring explorer, so only loaded once.
+  // lists. Shared with the Determinand explorer, so only loaded once.
   const hubData = prepareHubSources(catalog, area, waterbodies);
   state.hubData = hubData.catch((error) => console.error("Scorecards: the hub's own datasets couldn't be loaded:", error));
   renderRatingLegend(els.health.keyEl);
@@ -91,15 +93,16 @@ export async function initScorecardsTab(els, { catalog, area, waterbodies, partn
   });
   await mapEl.viewOnReady();
 
-  const [FeatureLayer, GraphicsLayer, Graphic, Polygon, intersectionOperator, reactiveUtils] = await $arcgis.import([
+  const [FeatureLayer, GraphicsLayer, Graphic, Polygon, intersectionOperator, reactiveUtils, webMercatorUtils] = await $arcgis.import([
     "@arcgis/core/layers/FeatureLayer.js",
     "@arcgis/core/layers/GraphicsLayer.js",
     "@arcgis/core/Graphic.js",
     "@arcgis/core/geometry/Polygon.js",
     "@arcgis/core/geometry/operators/intersectionOperator.js",
     "@arcgis/core/core/reactiveUtils.js",
+    "@arcgis/core/geometry/support/webMercatorUtils.js",
   ]);
-  state.modules = { Graphic, intersectionOperator, reactiveUtils };
+  state.modules = { Graphic, intersectionOperator, reactiveUtils, webMercatorUtils };
 
   // The hub's waterbodies, exactly as supplied.
   const source = waterbodies.map((waterbody, index) => {
@@ -131,6 +134,8 @@ export async function initScorecardsTab(els, { catalog, area, waterbodies, partn
   });
   L.highlight = new GraphicsLayer({ listMode: "hide" });
   L.rivers = new GraphicsLayer({ title: RIVER_NETWORK.title });
+  // Animated trails along the same rivers, showing which way they flow.
+  L.flow = await createFlowLayer({ title: RIVER_NETWORK.flowTitle, listMode: "hide" });
   L.pollution = new FeatureLayer({
     url: SCORECARD_SOURCES.pollutionUrl,
     outFields: ["siteNameEA", "siteNameWASC", "waterCompanyName", "totalDurationAllSpillsHrs", "countedSpills"],
@@ -164,7 +169,7 @@ export async function initScorecardsTab(els, { catalog, area, waterbodies, partn
     title: "Survey sites",
   });
   // Sites always on top - they're the point of the map.
-  mapEl.map.addMany([L.waterbodies, L.highlight, L.rivers, L.pollution, L.morph, L.riverfly, L.nbs, L.hubSites, L.sites]);
+  mapEl.map.addMany([L.waterbodies, L.highlight, L.rivers, L.flow, L.pollution, L.morph, L.riverfly, L.nbs, L.hubSites, L.sites].filter(Boolean));
 
   mapEl.addEventListener("arcgisViewClick", (event) => handleMapClick(event.detail));
   els.deselectEl.addEventListener("click", deselect);
@@ -451,6 +456,8 @@ async function applyClippedRivers() {
   const layer = state.layers.rivers;
   const request = ++state.requests.rivers;
   layer.removeAll();
+  state.riverFlow = [];
+  state.layers.flow?.graphics.removeAll();
   if (!state.selected) return;
   const boundary = state.selected.geometry;
   try {
@@ -465,17 +472,33 @@ async function applyClippedRivers() {
     });
     if (request !== state.requests.rivers) return;
     const { Graphic, intersectionOperator } = state.modules;
+    // The same cut sections feed the flow trails, in the map's own projection.
+    const { webMercatorUtils } = state.modules;
+    state.riverFlow = [];
     const graphics = result.features.map((f) => {
       const clipped = intersectionOperator.execute(f.geometry, boundary);
+      if (clipped?.paths) state.riverFlow.push({ geometry: webMercatorUtils.geographicToWebMercator(clipped), strahler: f.attributes.Strahler });
       return clipped ? new Graphic({
         geometry: clipped,
         symbol: { type: "simple-line", color: RIVER_NETWORK.color, width: strahlerWidth(f.attributes.Strahler), cap: "round", join: "round" },
       }) : null;
     }).filter(Boolean);
-    if (request === state.requests.rivers) layer.addMany(graphics);
+    if (request === state.requests.rivers) {
+      layer.addMany(graphics);
+      drawFlow();
+    }
   } catch (error) {
     if (request === state.requests.rivers) console.error("Scorecards: river network couldn't be clipped to the waterbody:", error);
   }
+}
+
+// The flow trails for the selected waterbody's rivers, in the colour that
+// shows on the basemap now.
+function drawFlow() {
+  const flow = state.layers.flow;
+  if (!flow) return;
+  flow.graphics.removeAll();
+  flow.graphics.addMany((state.riverFlow ?? []).map(({ geometry, strahler }) => flowGraphic(state.mapEl, geometry, strahler)));
 }
 
 function strahlerWidth(strahler) {
@@ -713,6 +736,7 @@ function habitatTables(scorecard) {
 
 function handleThemeChange(theme) {
   state.mapEl.basemap = MAP.basemap[theme];
+  drawFlow(); // the trails change colour with the basemap
   state.layers.waterbodies.renderer = waterbodyRenderer(theme);
   updateHighlight();
   renderHealthWheel();
@@ -722,22 +746,68 @@ function handleThemeChange(theme) {
 // PDF report
 // ---------------------------------------------------------------------
 
-// Map screenshot for print: always the light basemap and boundaries,
-// framed on the waterbody; whatever was on screen is restored after.
+// The map picture for the report: a light grey basemap, the waterbody tinted in
+// its rating colour with a dark outline, faint outlines of the waterbodies
+// around it, and its rivers and sites. No flow trails. It is cropped to the
+// shape of the space it fills on the page, with the waterbody centred.
+// Whatever was on screen is restored after.
 async function printScreenshot() {
   const { mapEl, layers, modules } = state;
+  const { view } = mapEl;
+  const { Graphic } = modules;
   const basemap = mapEl.basemap;
   const renderer = layers.waterbodies.renderer;
+  const flowWasOn = layers.flow?.visible;
+  const band = bandForRank(catchmentHealthOverallRank(state.scorecard));
   mapEl.basemap = MAP.basemap.light;
-  layers.waterbodies.renderer = waterbodyRenderer("light");
+  // The neighbours: a thin grey line, so the waterbody stands out among them.
+  layers.waterbodies.renderer = {
+    type: "simple",
+    symbol: { type: "simple-fill", color: [0, 0, 0, 0], outline: { color: [120, 120, 120, 140], width: 0.6 } },
+  };
+  if (layers.flow) layers.flow.visible = false; // moving trails don't belong in a still picture
+  layers.highlight.removeAll();
+  layers.highlight.add(new Graphic({
+    geometry: state.selected.geometry,
+    symbol: {
+      type: "simple-fill",
+      color: band ? hexToRgbArray(band.color, 0.3) : [0, 0, 0, 0],
+      outline: { color: [31, 41, 55, 255], width: 2.2 },
+    },
+  }));
   try {
-    await mapEl.goTo(state.selected.geometry);
-    await modules.reactiveUtils.whenOnce(() => !mapEl.view.updating);
-    return await mapEl.takeScreenshot({ format: "png" });
+    await mapEl.goTo(state.selected.geometry.extent.clone().expand(1.15));
+    await modules.reactiveUtils.whenOnce(() => !view.updating);
+    return await mapEl.takeScreenshot({ format: "png", ...printArea(view, state.selected.geometry.extent) });
   } finally {
     mapEl.basemap = basemap;
     layers.waterbodies.renderer = renderer;
+    if (layers.flow) layers.flow.visible = flowWasOn;
+    updateHighlight();
   }
+}
+
+// The part of the view to print: the page's map shape (MAP_ASPECT,
+// height over width), centred on the waterbody with a margin, and no bigger
+// than the view. Returned as takeScreenshot options, with a fixed output size.
+function printArea(view, extent) {
+  const corners = [[extent.xmin, extent.ymin], [extent.xmax, extent.ymax]].map(([x, y]) => view.toScreen({ type: "point", x, y, spatialReference: extent.spatialReference }));
+  const left = Math.min(corners[0].x, corners[1].x);
+  const right = Math.max(corners[0].x, corners[1].x);
+  const top = Math.min(corners[0].y, corners[1].y);
+  const bottom = Math.max(corners[0].y, corners[1].y);
+  const margin = 1.1;
+  let width = Math.max((right - left) * margin, ((bottom - top) * margin) / MAP_ASPECT);
+  let height = width * MAP_ASPECT;
+  // Too big for the view: take the largest shape that fits.
+  if (width > view.width || height > view.height) {
+    width = Math.min(view.width, view.height / MAP_ASPECT);
+    height = width * MAP_ASPECT;
+  }
+  const x = Math.min(Math.max((left + right) / 2 - width / 2, 0), view.width - width);
+  const y = Math.min(Math.max((top + bottom) / 2 - height / 2, 0), view.height - height);
+  const outputWidth = 1600;
+  return { area: { x, y, width, height }, width: outputWidth, height: Math.round(outputWidth * MAP_ASPECT) };
 }
 
 async function downloadPdf() {

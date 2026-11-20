@@ -13,7 +13,7 @@
     "better: higher means more is better, so a value at or above the high figure is High, at or above good is Good, and so on. Below poor is Bad.",
     "better: lower means less is better, so a value at or below the high figure is High, at or below good is Good, and so on. Above poor is Bad.",
     "A figure can be written as a fraction, such as \"1/20\".",
-    "thresholds: catalog means the measure uses its determinand's bands in data/catalog.json, the same ones that colour the Monitoring explorer, so the two can't disagree. Low is High, Slightly Elevated is Good, Elevated is Moderate, High is Poor and Very High is Bad.",
+    "thresholds: catalog means the measure uses its determinand's bands in data/catalog.json, the same ones that colour the Determinand explorer, so the two can't disagree. Low is High, Slightly Elevated is Good, Elevated is Moderate, High is Poor and Very High is Bad.",
     "statistic: mean or median, how a waterbody's readings are combined before rating.",
     "whenNone: what a count of none means for a measure that counts things (only Action uses it so far). \"no data\" leaves it unrated, shown grey; \"bad\" rates it Bad.",
     "A theme's rating is the average of its measures' ratings, and the overall rating the average of the themes'.",

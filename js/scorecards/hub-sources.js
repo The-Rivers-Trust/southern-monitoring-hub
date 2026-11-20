@@ -108,7 +108,7 @@ export const siteGroupDistance = () => groupWithinMetres;
 
 // The scorecard only counts records inside a waterbody's boundary. The
 // hub also places records up to 250 m outside one into the nearest
-// waterbody (for the Monitoring explorer); those have a placed position
+// waterbody (for the Determinand explorer); those have a placed position
 // and are left out here.
 const isInside = (attributes, waterBodyId) => attributes[WATERBODY_FIELD] === waterBodyId && attributes[PLACED_LON_FIELD] == null;
 const switchedOff = new Set(); // "measureKey|dataset", from the sources panel

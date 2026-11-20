@@ -144,8 +144,10 @@ function lastClassifiedChart(byYear, latestRound, selectedYear, onPickYear) {
   return svg;
 }
 
-// Rows: status before. Columns: status after.
-function transitionTable(matrix, statuses, fromText, toText) {
+// Rows: status before. Columns: status after. A cell is better, worse or no
+// change; one whose kind is switched off in the legend is dimmed, and cannot
+// be picked. Picking a cell (onPick) shows only the sites that made that move.
+function transitionTable(matrix, statuses, fromText, toText, { hidden, selected, onPick }) {
   const table = el("table", "transitionTable");
   const head = el("tr");
   const corner = el("th", "corner");
@@ -163,9 +165,29 @@ function transitionTable(matrix, statuses, fromText, toText) {
     for (const after of statuses) {
       const value = matrix.get(before.value).get(after.value);
       const cell = el("td", value ? null : "isZero", count(value));
-      if (after.rank > before.rank) cell.classList.add("isBetter");
-      else if (after.rank < before.rank) cell.classList.add("isWorse");
-      cell.title = `${count(value)} went from ${before.value} to ${after.value}`;
+      const kind = after.rank > before.rank ? "improved" : after.rank < before.rank ? "declined" : "same";
+      if (kind === "improved") cell.classList.add("isBetter");
+      else if (kind === "declined") cell.classList.add("isWorse");
+      const off = hidden.has(kind);
+      if (off) cell.classList.add("isOff");
+      const isSelected = selected?.from === before.value && selected?.to === after.value;
+      if (isSelected) cell.classList.add("isSelected");
+      cell.title = off
+        ? `${count(value)} went from ${before.value} to ${after.value} (switched off in the key above)`
+        : `${count(value)} went from ${before.value} to ${after.value}. Click to show only these on the map.`;
+      if (!off && value) {
+        cell.classList.add("isPick");
+        cell.tabIndex = 0;
+        cell.setAttribute("role", "button");
+        cell.setAttribute("aria-pressed", String(isSelected));
+        const pick = () => onPick(isSelected ? null : { from: before.value, to: after.value });
+        cell.addEventListener("click", pick);
+        cell.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          pick();
+        });
+      }
       row.append(cell);
     }
     table.append(row);
@@ -173,27 +195,13 @@ function transitionTable(matrix, statuses, fromText, toText) {
   return table;
 }
 
-function statusKey(statuses, statusColours) {
-  const key = el("ul", "statusKey");
-  statuses.forEach((status) => {
-    const item = el("li");
-    const swatch = el("span", "marker marker--square");
-    swatch.style.setProperty("--marker-colour", statusColours[status.value]);
-    item.append(swatch, el("span", null, status.value));
-    key.append(item);
-  });
-  return key;
-}
-
 const roundText = (round, which) => (typeof round === "number" ? String(round) : which);
 
 export function renderClassificationDetails(container, view) {
-  const { catalog, item, mode, entries, counts, hidden, onToggle, totalSites, clipNote, perRound, statusColours } = view;
-  const shown = [...counts.values()].reduce((sum, value) => sum + value, 0);
+  const { catalog, item, mode, entries, counts, hidden, onToggle, perRound, statusColours } = view;
   const parts = [el("h2", null, item.label), el("p", "summary", view.summaryText)];
 
   if (view.message) {
-    parts.push(el("p", "note", `${clipNote} ${sites(totalSites)} in total.`));
     container.replaceChildren(...parts);
     return;
   }
@@ -215,27 +223,34 @@ export function renderClassificationDetails(container, view) {
       ));
     }
   } else {
-    parts.push(chartBlock("Status each round", roundsChart(perRound, catalog.statuses, statusColours),
-      "Each round includes whichever sites were classified that year, so the sites differ between bars."));
-    parts.push(statusKey(catalog.statuses, statusColours));
+    parts.push(chartBlock("Status each round", roundsChart(perRound, catalog.statuses, statusColours)));
   }
 
   if (mode === "change" && view.transitions) {
     const fromText = roundText(view.from, "Earliest");
     const toText = roundText(view.to, "Latest");
-    const paired = shown - (counts.get("unpaired") ?? 0);
-    const better = counts.get("improved") ?? 0;
-    const worse = counts.get("declined") ?? 0;
+    // The whole area's counts, not those of a picked cell.
+    const all = view.fullCounts;
+    const paired = (all.get("improved") ?? 0) + (all.get("declined") ?? 0) + (all.get("same") ?? 0);
+    const better = all.get("improved") ?? 0;
+    const worse = all.get("declined") ?? 0;
+    const { transition } = view;
+    const caption = paired
+      ? `Of ${sites(paired)} classified in both rounds, ${percent(better, paired)} got better and ${percent(worse, paired)} got worse. Shaded blue: better. Shaded orange: worse. Greyed cells are switched off in the key above.`
+      : "No site here was classified in both rounds.";
     parts.push(chartBlock(
       "From one status to another",
-      transitionTable(view.transitions, [...catalog.statuses].sort((a, b) => b.rank - a.rank), fromText, toText),
-      paired
-        ? `Of ${sites(paired)} classified in both rounds, ${percent(better, paired)} got better and ${percent(worse, paired)} got worse. Shaded blue: better. Shaded orange: worse.`
-        : "No site here was classified in both rounds.",
+      transitionTable(view.transitions, [...catalog.statuses].sort((a, b) => b.rank - a.rank), fromText, toText, {
+        hidden,
+        selected: transition,
+        onPick: view.onPickTransition,
+      }),
+      transition
+        ? `Showing sites that went from ${transition.from} to ${transition.to}. Click the cell again to show all. ${caption}`
+        : `Click a cell to show only those sites on the map. ${caption}`,
     ));
   }
 
   if (item.note) parts.push(el("p", "note", item.note));
-  parts.push(el("p", "note", `${clipNote} ${sites(totalSites)} in total. Source: ${catalog.service.label}.`));
   container.replaceChildren(...parts);
 }
